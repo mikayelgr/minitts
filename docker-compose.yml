@@ -1,0 +1,92 @@
+name: minitts
+services:
+  redis:
+    image: redis:7.2
+    restart: unless-stopped
+    container_name: minitts-redis
+    volumes:
+      - redis_data:/data
+    networks:
+      - minitts_network
+
+  redisinsight:
+    image: redislabs/redisinsight:latest
+    container_name: minitts-redisinsight
+    ports:
+      - "5540:5540"
+    environment:
+      - RI_REDIS_HOST=redis
+      - RI_REDIS_PORT=6379
+      - RI_REDIS_USERNAME=default
+    depends_on:
+      - redis
+    networks:
+      - minitts_network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    container_name: minitts-rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    ports:
+      - "5672:5672"
+      - "15672:15672" # Management UI
+    networks:
+      - minitts_network
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  postgres:
+    image: postgres:latest
+    restart: unless-stopped
+    container_name: minitts-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - minitts_network
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: minitts-pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@example.com
+      - PGADMIN_DEFAULT_PASSWORD=postgres
+    ports:
+      - "5050:5050"
+    networks:
+      - minitts_network
+
+  minitts-api:
+    build: ./api/
+    restart: unless-stopped
+    container_name: minitts-api
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
+    networks:
+      - minitts_network
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+# TODO: Add minitts-worker service with appropriate number of replicas and health checks
+
+networks:
+  minitts_network:
+    attachable: false
+
+volumes:
+  redis_data:
+  postgres_data:
+  rabbitmq_data:
