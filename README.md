@@ -2,6 +2,8 @@
 
 MiniTTS is a production-minded foundation for an asynchronous Text-to-Speech service based on the [Soprano-1.1-80M](https://huggingface.co/ekwek/Soprano-1.1-80M) model.
 
+For inference, the plan is to run Apple MLX using an MLX wrapper of the same Soprano model for improved Apple Silicon performance, served behind [Granian](https://github.com/emmett-framework/granian) as the Rust-based inference server. This is one of the optimizations used to boost throughput performance.
+
 ## What This Project Aims To Accomplish
 
 The target system is an async TTS microservice where clients:
