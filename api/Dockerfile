@@ -9,6 +9,8 @@ COPY pyproject.toml .
 RUN uv pip install --system -r pyproject.toml
 
 ENV PORT=8080
+# https://stackoverflow.com/a/59812588/14575901
+ENV PYTHONUNBUFFERED=1
 
 # these are the environment variables that will be used by the application, they will be passed in at runtime
 # these are strictly necessary for the application to run, it's the user's responsibility to provide them when
