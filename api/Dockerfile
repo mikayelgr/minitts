@@ -4,7 +4,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /api
 
-COPY pyproject.toml .
+COPY pyproject.toml uv.lock ./
 # installing the dependencies globally so that they are available for the entire project
 RUN uv pip install --system -r pyproject.toml
 

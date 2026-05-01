@@ -63,6 +63,10 @@ services:
     networks:
       - minitts_network
 
+  minitts-soprano-endpoint:
+    build: ./docker/soprano.dockerfile
+    restart: unless-stopped
+
   minitts-api:
     build: ./api/
     restart: unless-stopped

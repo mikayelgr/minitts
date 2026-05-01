@@ -1,0 +1,8 @@
+pangrams
+
+The quick brown fox jumps over the lazy dog.
+Pack my box with five dozen liquor jugs.
+The five boxing wizards jump quickly.
+Bright vixens jump; dozy fowl quack.
+Sphinx of black quartz, judge my vow.
+How vexingly quick aft zebras jump!
