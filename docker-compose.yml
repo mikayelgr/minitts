@@ -59,14 +59,15 @@ services:
     build:
       context: ./api
     environment:
-      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672/
+      - CELERY_RESULT_BACKEND_URL=redis://redis:6379/0
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
     depends_on:
+      - celeryz
       - redis
       - postgres
       - rabbitmq
       - soprano
-      - celeryz
 
   celeryz:
     build:
@@ -79,6 +80,7 @@ services:
       - redis
       - rabbitmq
       - postgres
+      - soprano
 
 volumes:
   redis_data:

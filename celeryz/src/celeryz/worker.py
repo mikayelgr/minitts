@@ -14,7 +14,7 @@ class CeleryWorkerConfig(BaseSettings):
 # Ensure that the .env file is loaded and the fields are valid before creating the Celery app
 settings = CeleryWorkerConfig()
 
-app = Celery("tasks", broker=str(settings.celery_broker_url), backend=str(settings.celery_result_backend_url))
+app = Celery("celeryz", broker=str(settings.celery_broker_url), backend=str(settings.celery_result_backend_url))
 app.conf.update(
     task_compression="gzip",
     # https://docs.celeryq.dev/en/stable/userguide/configuration.html#task-acks-late

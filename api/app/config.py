@@ -1,11 +1,11 @@
 from functools import lru_cache
 from typing import cast
 from fastapi import FastAPI
-from pydantic import PostgresDsn
+from pydantic import PostgresDsn, RedisDsn, AmqpDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
-import redis.asyncio as redis
 import logging
 from contextlib import asynccontextmanager
+from celery import Celery
 
 logger = logging.getLogger(__name__)
 
@@ -15,10 +15,7 @@ class AppState:
     Application state to hold shared resources like Redis and PostgreSQL connections.
     """
 
-    # redis: redis.ConnectionPool
-    # """
-    # Redis connection pool.
-    # """
+    celery: Celery
 
 
 class App(FastAPI):
@@ -42,11 +39,17 @@ class EnvSettings(BaseSettings):
     Environment settings for the application.
     """
 
-    # redis_url: RedisDsn
-    # """
-    # Redis connection URL.
-    #  Example: redis://localhost:6379/0
-    # """
+    celery_broker_url: AmqpDsn
+    """
+    RabbitMQ connection URL for Celery.
+     Example: amqp://user:password@localhost:5672/vhost
+    """
+
+    celery_result_backend_url: RedisDsn
+    """
+    Redis connection URL for Celery.
+     Example: redis://localhost:6379/0
+    """
 
     database_url: PostgresDsn
     """
@@ -67,28 +70,22 @@ def get_env_settings() -> EnvSettings:
     return EnvSettings()
 
 
-# async def acquire_redis(dsn: RedisDsn) -> None:
-#     """
-#     Acquire a Redis connection pool and test the connection.
-#     """
-
-#     pool = redis.ConnectionPool.from_url(str(dsn), max_connections=20)
-#     client = redis.Redis(connection_pool=pool)
-#     try:
-#         await client.ping()  # Test the Redis connection
-#         logger.info("Successfully connected to Redis.")
-#         return pool  # Return the connection pool to be used by the app state
-#     except Exception as e:
-#         raise RuntimeError(f"Failed to connect to Redis: {e}")
-#     finally:
-#         await client.close()  # Close the test Redis client
-
-
 @asynccontextmanager
 async def lifespan(app: App):
-    # cfg = get_env_settings()
-    # app.state.redis = await acquire_redis(cfg.redis_url)
+    cfg = get_env_settings()
+
+    app.state.celery = Celery("api", broker=str(cfg.celery_broker_url), backend=str(cfg.celery_result_backend_url))
+    # Ensure that the Celery connection is working before starting the application
+    app.state.celery.connection().ensure_connection(max_retries=3, timeout=10)
+
+    workers = app.state.celery.control.ping()  # Ensure that there are workers available and the connection is working
+    # If no workers are available, raise an error to prevent the application from
+    # starting without a working Celery connection
+    if not workers:
+        raise RuntimeError(
+            "No Celery workers available. Please ensure that the Celery worker is running and can connect to the broker."
+        )
 
     yield  # The application will run until it is shut down
 
-    # await app.state.redis.disconnect()  # Properly close the Redis connection pool
+    app.state.celery.close()  # Clean up the Celery connection when the application is shutting down
