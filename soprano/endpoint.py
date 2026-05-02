@@ -82,13 +82,13 @@ async def stream_speech(text: str = Query()) -> AsyncIterable[bytes]:
     """
     Stream the generated speech audio for the given text.
     """
+
     # Generate and yield the WAV header first.
-    wav_header = get_wav_header(
+    yield get_wav_header(
         SOPRANO_SAMPLE_RATE,
         SOPRANO_SAMPLE_WIDTH,
         SOPRANO_CHANNELS,
     )
-    yield wav_header
 
     # Then, stream the raw audio chunks.
     generator: Generator[Tensor, Any] = app.state.model.infer_stream(text)
@@ -97,6 +97,8 @@ async def stream_speech(text: str = Query()) -> AsyncIterable[bytes]:
     # thread using `asyncio.to_thread`, we prevent the PyTorch inference from blocking
     # the main ASGI event loop, allowing the server to handle concurrent requests.
     def _next_chunk():
+        """Helper function to get the next audio chunk from the generator."""
+
         try:
             return next(generator)
         except StopIteration:
@@ -120,4 +122,5 @@ async def stream_speech(text: str = Query()) -> AsyncIterable[bytes]:
         # We multiply by 32767.0 (the max positive value of a 16-bit signed
         # integer) to scale the amplitude, then explicitly cast to torch.int16.
         # This aligns the model's data with the WAV header's format, enabling clean playback.
+        # https://stackoverflow.com/questions/22895657/how-can-i-play-raw-samples-pcm-16-audio-data-record-from-android-in-web-using-w
         yield (generated_chunk * 32767.0).to(torch.int16).cpu().numpy().tobytes()
