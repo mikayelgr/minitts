@@ -19,6 +19,6 @@ api.localhost:80 {
 	reverse_proxy api:8080
 }
 
-soprano.localhost:80 {
+soprano-inference.localhost:80 {
 	reverse_proxy soprano:8081
 }

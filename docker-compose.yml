@@ -49,13 +49,12 @@ services:
       - PGADMIN_DEFAULT_PASSWORD=postgres
 
   soprano:
-    build: ./soprano
-    deploy:
-      # Setting the number of replicas to 5 for the soprano service to handle increased load and ensure high availability.
-      replicas: 5
+    build:
+      context: ./soprano
 
   api:
-    build: ./api
+    build:
+      context: ./api
     environment:
       - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
