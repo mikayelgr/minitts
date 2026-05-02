@@ -8,15 +8,25 @@ services:
       - ./misc/Caddyfile:/etc/caddy/Caddyfile
       - ./misc/index.html:/usr/share/caddy/index.html
     depends_on:
-      - api
-      - redisinsight
-      - rabbitmq
-      - pgadmin
+      api:
+        condition: service_started
+      redisinsight:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      pgadmin:
+        condition: service_started
 
   redis:
     image: redis:7.2
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   redisinsight:
     image: redislabs/redisinsight:3.4
@@ -25,7 +35,8 @@ services:
       - RI_REDIS_PORT=6379
       - RI_REDIS_USERNAME=default
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -34,6 +45,17 @@ services:
       - RABBITMQ_DEFAULT_PASS=guest
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      # `rabbitmq-diagnostics check_running` confirms the broker is up;
+      # `check_port_connectivity` confirms AMQP is actually accepting clients.
+      # The combo avoids the classic "container is up but AMQP not listening yet" race.
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity" ]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      # RabbitMQ takes a while to fully boot (Erlang VM + plugins).
+      # start_period suppresses failure counting during this window.
+      start_period: 30s
 
   postgres:
     image: postgres:17
@@ -42,6 +64,14 @@ services:
       - POSTGRES_PASSWORD=postgres
     volumes:
       - postgres_data:/var/lib/postgresql
+    healthcheck:
+      # -U must match POSTGRES_USER. pg_isready returns 0 only when the
+      # server is accepting connections, not just when the process is alive.
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   pgadmin:
     image: elestio/pgadmin:REL-9_14
@@ -49,11 +79,21 @@ services:
       - PGADMIN_DEFAULT_EMAIL=admin@example.com
       - PGADMIN_DEFAULT_PASSWORD=postgres
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 
   soprano:
     build:
       context: ./soprano
+    healthcheck:
+      # The soprano container has python+requests via its deps; this avoids
+      # adding curl/wget to the slim image just for healthchecks.
+      test: [ "CMD-SHELL", "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://localhost:8081/health\", timeout=2).status==200 else 1)'" ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      # Model load + warmup is slow. Don't count failures during this window.
+      start_period: 120s
 
   api:
     build:
@@ -63,11 +103,18 @@ services:
       - CELERY_RESULT_BACKEND_URL=redis://redis:6379/0
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
     depends_on:
-      - celeryz
-      - redis
-      - postgres
-      - rabbitmq
-      - soprano
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      soprano:
+        condition: service_healthy
+      # NOTE: api should NOT depend on celeryz. The whole point of the broker
+      # is decoupling — api can enqueue jobs even if no workers are running.
+      # Removing this also breaks a potential circular wait if you ever add
+      # api as a dep of celeryz (e.g. for a shared service).
 
   celeryz:
     build:
@@ -76,11 +123,16 @@ services:
     environment:
       - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672/
       - CELERY_RESULT_BACKEND_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
     depends_on:
-      - redis
-      - rabbitmq
-      - postgres
-      - soprano
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      soprano:
+        condition: service_healthy
 
 volumes:
   redis_data:
