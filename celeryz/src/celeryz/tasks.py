@@ -4,7 +4,7 @@ from celery import Task
 
 
 @app.task(name=TTSSynthesizeTask.name, bind=True)
-def synthesize_audio(_: Task, payload: dict) -> TTSSynthesizeResult:
+def synthesize_audio(_: Task, payload: dict) -> dict:
     # Validate the payload using the Pydantic model defined in TTSSynthesizeTask
     # If the payload is invalid, a ValidationError will be raised and the task will
     # be marked as failed by Celery.
