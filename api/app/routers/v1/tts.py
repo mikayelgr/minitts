@@ -1,12 +1,12 @@
 from fastapi import APIRouter
 from http import HTTPStatus
 from pydantic import BaseModel, Field, HttpUrl
-from app.config import get_env_settings
+from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/tts")
 
 
-class CreateTTSJobResponse(BaseModel):
+class CreateTTSJobResponse(JSONResponse):
     """
     CreateTTSJobResponse defines the structure of the response returned after successfully
     submitting a TTS job.
