@@ -8,8 +8,9 @@ WORKDIR /api
 # these are the environment variables that will be used by the application, they will be passed in at runtime
 # these are strictly necessary for the application to run, it's the user's responsibility to provide them when
 # running the container.
-ARG REDIS_URL
-ARG POSTGRES_URL
+ARG CELERY_BROKER_URL
+ARG CELERY_RESULT_BACKEND_URL
+ARG DATABASE_URL
 ENV UV_PROJECT_ENVIRONMENT=/usr/local
 
 COPY . .

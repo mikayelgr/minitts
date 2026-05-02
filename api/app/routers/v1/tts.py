@@ -1,12 +1,11 @@
 from fastapi import APIRouter
 from http import HTTPStatus
 from pydantic import BaseModel, Field, HttpUrl
-from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/tts")
 
 
-class CreateTTSJobResponse(JSONResponse):
+class CreateTTSJobResponse(BaseModel):
     """
     CreateTTSJobResponse defines the structure of the response returned after successfully
     submitting a TTS job.
@@ -40,7 +39,7 @@ class CreateTTSJobRequest(BaseModel):
     )
 
 
-@router.post("/", status_code=HTTPStatus.ACCEPTED, response_class=CreateTTSJobResponse)
+@router.post("/", status_code=HTTPStatus.ACCEPTED, response_model=CreateTTSJobResponse)
 async def submit(request: CreateTTSJobRequest):
     """
     This endpoint is responsible for accepting TTS inference requests. It validates the input payload
