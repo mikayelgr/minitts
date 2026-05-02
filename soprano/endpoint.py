@@ -12,6 +12,7 @@ from typing import Any
 from torch import Tensor
 from functools import lru_cache
 import torch
+import gc
 
 # Silence a known PyTorch warning emitted inside soprano's ISTFT path.
 warnings.filterwarnings(
@@ -45,6 +46,7 @@ def get_wav_header(sample_rate: int, sample_width: int, channels: int) -> bytes:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logging.info("Loading the SopranoTTS model into memory...")
     app.state.model = SopranoTTS(
         # intentionally setting the batch size to 1 to minimize latency for streaming responses
         # and make sure that in case this is scaled up to multiple instances, each instance can
@@ -52,12 +54,16 @@ async def lifespan(app: FastAPI):
         decoder_batch_size=1,
     )
 
-    logger.info("Warming up the model with sample data inferences...")
+    logger.info("Model loaded. Warming up the model with sample data inferences...")
     warmup_data = [open(f"./warmup_data/{i+1}.txt", "r").read() for i in range(2)]
     for _ in range(2):
         warmup_tasks = [asyncio.to_thread(app.state.model.infer, data) for data in warmup_data]
         await asyncio.gather(*warmup_tasks)
 
+    # freezing all the memory weights and caches after warmup to optimize for inference
+    # performance and reduce memory fragmentation and latency spikes during actual requests
+    gc.freeze()
+    gc.collect()  # force a final GC pass to clean up any remaining unreferenced objects
     logger.info("Warmup complete. The model is ready to serve requests.")
     yield
 
@@ -75,6 +81,11 @@ app = EndpointApp(lifespan=lifespan)
 
 class AudioStreamingResponse(StreamingResponse):
     media_type = "audio/wav"
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
 
 
 @app.get("/v1/audio/speech/stream", response_class=AudioStreamingResponse)
@@ -96,6 +107,13 @@ async def stream_speech(text: str = Query()) -> AsyncIterable[bytes]:
     # By offloading the synchronous, CPU-bound `next(generator)` call to a background
     # thread using `asyncio.to_thread`, we prevent the PyTorch inference from blocking
     # the main ASGI event loop, allowing the server to handle concurrent requests.
+    #
+    # Additionally, we're disabling PyTorch's autograd engine during inference. Since this service
+    # only runs forward passes and never computes gradients, the computation graph that autograd
+    # builds on every operation is pure overhead. inference_mode is stricter than no_grad, because
+    # tensors created inside it cannot participate in autograd at all, letting PyTorch skip internal
+    # bookkeeping that no_grad still performs.
+    @torch.inference_mode()
     def _next_chunk():
         """Helper function to get the next audio chunk from the generator."""
 
