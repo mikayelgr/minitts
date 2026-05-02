@@ -50,6 +50,9 @@ services:
 
   soprano:
     build: ./soprano
+    deploy:
+      # Setting the number of replicas to 5 for the soprano service to handle increased load and ensure high availability.
+      replicas: 5
 
   api:
     build: ./api
