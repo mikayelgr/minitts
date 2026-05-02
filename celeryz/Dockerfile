@@ -7,13 +7,13 @@ ARG CELERY_BROKER_URL
 ARG CELERY_RESULT_BACKEND
 ENV UV_PROJECT_ENVIRONMENT=/usr/local
 
-WORKDIR /celeryz
+WORKDIR /container
 # Copy the entire repo structure so path dependencies resolve correctly. We assume that
 # the Docker build context is the root of the project (where the main pyproject.toml is located).
 COPY celeryz/ ./celeryz/
 COPY core/ ./core/
 
-WORKDIR /celeryz/celeryz
+WORKDIR /container/celeryz
 
 # installing the dependencies globally so that they are available for the entire project
 RUN uv sync --frozen --no-dev

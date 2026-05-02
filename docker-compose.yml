@@ -97,7 +97,8 @@ services:
 
   api:
     build:
-      context: ./api
+      context: .
+      dockerfile: api/Dockerfile
     environment:
       - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672/
       - CELERY_RESULT_BACKEND_URL=redis://redis:6379/0
