@@ -1,0 +1,24 @@
+localhost:80 {
+	root * /usr/share/caddy
+	file_server
+}
+
+redisinsight.localhost:80 {
+	reverse_proxy redisinsight:5540
+}
+
+rabbitmq.localhost:80 {
+	reverse_proxy rabbitmq:15672
+}
+
+pgadmin.localhost:80 {
+	reverse_proxy pgadmin:80
+}
+
+api.localhost:80 {
+	reverse_proxy api:8000
+}
+
+soprano.localhost:80 {
+	reverse_proxy soprano:8081
+}

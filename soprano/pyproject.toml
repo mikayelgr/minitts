@@ -8,11 +8,19 @@ dependencies = [
     "fastapi>=0.136.1",
     "granian>=2.7.4",
     "soprano-tts>=0.2.0",
+    "torch>=2.11.0",
+    "torchaudio>=2.11.0",
     "uvloop>=0.22.1",
 ]
 
 [dependency-groups]
-dev = [
-    "httpx>=0.28.1",
-    "pytest>=8.3.4",
-]
+dev = ["httpx>=0.28.1", "pytest>=8.3.4"]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
