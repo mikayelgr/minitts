@@ -1,4 +1,4 @@
-all:
+start:
 	@HF_HUB_VERBOSITY=error HF_HUB_DISABLE_PROGRESS_BARS=1 granian --interface asgi \
 			--host 0.0.0.0 \
 			--port 8081 \
@@ -7,3 +7,6 @@ all:
 			--no-ws \
 			--metrics \
 			endpoint:app
+
+preload:
+	@python ./scripts/preload_model.py

@@ -15,9 +15,9 @@ COPY . .
 RUN uv sync --frozen --no-dev
 # Cleaning up apt lists cache to minimize image size. This is especially important since the image
 RUN apt update -y && apt install build-essential -y && apt clean -y && rm -rf /var/lib/apt/lists/*
+# Pre-downloading the model weights to not waste startup time during runtime.
+RUN make preload
 
 EXPOSE 8081
-# Running soprano using Granian with uvloop for higher throughput
-# in order to be able to use the client libraries provided by OpenAI
-# without any additional configuration.
-CMD [ "make" ]
+# Running soprano using Granian with uvloop for higher throughput.
+CMD [ "make", "start" ]
