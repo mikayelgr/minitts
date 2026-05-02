@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from soprano import SopranoTTS
 from contextlib import asynccontextmanager
 import logging
-from collections.abc import Iterable, Generator, AsyncIterable
+from collections.abc import Generator, AsyncIterable
 from typing import Any
 from torch import Tensor
 from functools import lru_cache
