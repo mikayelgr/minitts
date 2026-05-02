@@ -48,6 +48,8 @@ services:
     environment:
       - PGADMIN_DEFAULT_EMAIL=admin@example.com
       - PGADMIN_DEFAULT_PASSWORD=postgres
+    depends_on:
+      - postgres
 
   soprano:
     build:
@@ -64,6 +66,7 @@ services:
       - postgres
       - rabbitmq
       - soprano
+      - celeryz
 
   celeryz:
     build:
