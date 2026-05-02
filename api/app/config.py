@@ -77,15 +77,5 @@ async def lifespan(app: App):
     app.state.celery = Celery("api", broker=str(cfg.celery_broker_url), backend=str(cfg.celery_result_backend_url))
     # Ensure that the Celery connection is working before starting the application
     app.state.celery.connection().ensure_connection(max_retries=3, timeout=10)
-
-    workers = app.state.celery.control.ping()  # Ensure that there are workers available and the connection is working
-    # If no workers are available, raise an error to prevent the application from
-    # starting without a working Celery connection
-    if not workers:
-        raise RuntimeError(
-            "No Celery workers available. Please ensure that the Celery worker is running and can connect to the broker."
-        )
-
     yield  # The application will run until it is shut down
-
     app.state.celery.close()  # Clean up the Celery connection when the application is shutting down
