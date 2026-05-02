@@ -16,7 +16,7 @@ pgadmin.localhost:80 {
 }
 
 api.localhost:80 {
-	reverse_proxy api:8000
+	reverse_proxy api:8080
 }
 
 soprano.localhost:80 {
