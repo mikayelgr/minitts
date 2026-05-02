@@ -1,0 +1,18 @@
+[project]
+name = "celeryz"
+version = "0.1.0"
+# description = "Add your description here"
+# readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "celery[redis]>=5.6.3",
+    "core",
+    "pydantic-settings>=2.14.0",
+]
+
+[tool.uv.sources]
+core = { path = "../core", editable = true }
+
+[build-system]
+requires = ["uv_build>=0.10.10,<0.11.0"]
+build-backend = "uv_build"

@@ -65,6 +65,18 @@ services:
       - rabbitmq
       - soprano
 
+  celeryz:
+    build:
+      context: .
+      dockerfile: celeryz/Dockerfile
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672/
+      - CELERY_RESULT_BACKEND_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+      - rabbitmq
+      - postgres
+
 volumes:
   redis_data:
   postgres_data:
