@@ -15,9 +15,8 @@ dependencies = [
 requires = ["uv_build>=0.10.10,<0.11.0"]
 build-backend = "uv_build"
 
+[dependency-groups]
+dev = ["python-dotenv>=1.2.2"]
+
 [project.optional-dependencies]
-migration = [
-    "alembic>=1.18.4",
-    "psycopg2-binary>=2.9.12",
-    "python-dotenv>=1.2.2",
-]
+migration = ["alembic>=1.18.4", "psycopg2-binary>=2.9.12"]

@@ -1,3 +1,12 @@
+try:
+    from dotenv import load_dotenv
+
+    # Load dotenv is only expected for development environments and should not be installed as a
+    # hard dependency. Right now it's only a dev dependency in the package.
+    load_dotenv()
+except ImportError:
+    pass
+
 import os
 from logging.config import fileConfig
 
