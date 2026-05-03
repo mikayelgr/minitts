@@ -26,7 +26,6 @@ config = context.config
 # Custom configuration: Override the sqlalchemy.url from the environment variable
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-print(f"Using DATABASE_URL: {to_sync_url(DATABASE_URL)}")
 if DATABASE_URL is None:
     raise ValueError("DATABASE_URL environment variable is not set")
 else:
