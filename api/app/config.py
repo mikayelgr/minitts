@@ -74,8 +74,10 @@ def get_env_settings() -> EnvSettings:
 async def lifespan(app: App):
     cfg = get_env_settings()
 
+    logger.info("Connecting to Celery broker...")
     app.state.celery = Celery("api", broker=str(cfg.celery_broker_url), backend=str(cfg.celery_result_backend_url))
     # Ensure that the Celery connection is working before starting the application
     app.state.celery.connection().ensure_connection(max_retries=3, timeout=10)
+
     yield  # The application will run until it is shut down
     app.state.celery.close()  # Clean up the Celery connection when the application is shutting down

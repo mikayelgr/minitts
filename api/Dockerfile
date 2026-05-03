@@ -21,4 +21,4 @@ WORKDIR /container/api
 RUN uv sync --frozen --no-dev
 EXPOSE 8080
 
-CMD [ "sh", "-c", "fastapi run app/main.py --port 8080 --host 0.0.0.0" ]
+CMD [ "sh", "-c", "uvicorn app.main:app --port 8080 --host 0.0.0.0 --no-access-log" ]
