@@ -109,6 +109,8 @@ services:
         condition: service_healthy
       soprano:
         condition: service_healthy
+      alembic-migrate:
+        condition: service_completed_successfully
       # NOTE: api should NOT depend on celeryz. The whole point of the broker
       # is decoupling — api can enqueue jobs even if no workers are running.
       # Removing this also breaks a potential circular wait if you ever add
@@ -130,6 +132,18 @@ services:
       postgres:
         condition: service_healthy
       soprano:
+        condition: service_healthy
+      alembic-migrate:
+        condition: service_completed_successfully
+
+  alembic-migrate:
+    build:
+      context: .
+      dockerfile: core/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
+    depends_on:
+      postgres:
         condition: service_healthy
 
 volumes:

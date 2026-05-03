@@ -8,6 +8,7 @@ class TaskState(StrEnum):
     Enum representing the state of a task.
     """
 
+    CREATED = "created"
     PENDING = "pending"
     SUCCESS = "success"
     FAILURE = "failure"
