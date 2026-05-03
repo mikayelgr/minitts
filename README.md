@@ -11,7 +11,7 @@ The target system is an async TTS microservice where clients:
 1. Submit text with a callback URL.
 2. Receive a job identifier immediately.
 3. Have synthesis processed in the background.
-4. Receive completion via webhook. (as a stream of bytes as soon as the data is available)
+4. Receive completion via webhook.
 
 In parallel, the platform should track quota usage (for example by character count or estimated audio seconds) so each request contributes to measurable, auditable usage.
 
@@ -30,24 +30,29 @@ Producer (API) and consumer (worker) are intentionally decoupled through the bro
 Current codebase already provides the initial building blocks:
 
 - FastAPI service scaffold in `api/app`.
-- Health endpoint at `/health`.
+- Health endpoint at `GET /health` for all HTTP-exposed packages.
+- TTS submission endpoint at `POST /v1/tts`.
 - Environment-based configuration for Redis and Postgres.
-- Docker Compose stack for Caddy, Redis, RedisInsight, RabbitMQ, Postgres, pgAdmin, the MiniTTS API container, and the Soprano inference engine + API.
+- Docker Compose stack for Caddy, Redis, RedisInsight, RabbitMQ, Postgres, pgAdmin, the MiniTTS API container, the Celery worker container, the Soprano inference engine + API, as well as a small container which runs the intial Alembic migrations automatically on start.
 - A developer-friendly landing page at `http://localhost:3000` that links to the main service subdomains.
-- A Celery package scaffold (`celeryz/`) for async worker and task implementation.
 
-This means the repository is already aligned with the requested stack direction (FastAPI + queue + database + Dockerized local development), and is ready for the remaining implementation work: job lifecycle endpoints, worker execution path, webhook delivery, and quota accounting logic.
+Currently implemented HTTP surface includes:
+
+- `GET /health` on the API.
+- `POST /v1/tts` on the API for queued job submission.
+- `GET /health` on the Soprano inference service
+- `POST /v1/audio/speech/stream` on the Soprano inference service for audio generation returned as 32kHz mono WAV streams.
 
 ## Quick Start
 
 1. Ensure Docker is installed and runs locally.
-2. From the project root, build and run the **full setup** which configures MiniTTS end-to-end:
+2. From the project root, build and run the full setup which configures MiniTTS end-to-end:
 
    ```bash
    docker compose up -d --build
    ```
 
-3. **If you need host ports during development**, use the development-only compose overlay:
+3. If you need host ports during development, use the development-only compose overlay:
 
    ```bash
    docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d redis rabbitmq postgres
@@ -57,13 +62,13 @@ This means the repository is already aligned with the requested stack direction 
 
    The overlay publishes:
 
-- Redis on `localhost:6379`
-- Postgres on `localhost:5432`
-- RabbitMQ AMQP on `localhost:5672`
+   - Redis on `localhost:6379`
+   - Postgres on `localhost:5432`
+   - RabbitMQ AMQP on `localhost:5672`
 
 ## Developer-friendly Gateway for All Services
 
-> Note: This part assumes that you've run the **full setup** as indicated in the previous section.
+> Note: This part assumes that you've run the full setup as indicated in the previous section.
 
 1. Open the local gateway in your browser:
 
@@ -100,6 +105,8 @@ The current Compose stack starts these services:
 
 - `caddy`: local reverse proxy and landing page at `localhost:3000`.
 - `api`: the FastAPI application that will accept TTS requests and expose HTTP endpoints.
+- `celeryz`: the Celery worker that consumes queued jobs.
+- `alembic-migrate`: the one-shot migration service that initializes the database schema.
 - `soprano`: the CPU inference service that turns text into audio.
 - `redis`: the Redis instance used for queueing and other fast shared state.
 - `redisinsight`: a Redis UI for inspecting keys, queues, and runtime state.
@@ -107,11 +114,7 @@ The current Compose stack starts these services:
 - `postgres`: the Postgres database for persistent application data.
 - `pgadmin`: a Postgres UI for inspecting tables and managing the database.
 
-Note: the repository currently contains Celery worker code under `celeryz/`, but the worker service is not yet added to the Compose file.
-
-For local development against the Dockerized infrastructure from the host machine, you
-need to configure these environment variables in the `.env` files of `celeryz/`, `core/`,
-and `api/` packages accordingly:
+For local development against the Dockerized infrastructure from the host machine, you need to configure these environment variables in the `.env` files of `celeryz/`, `core/`, and `api/` packages accordingly:
 
 ```text
 CELERY_BROKER_URL=amqp://guest:guest@localhost:5672/
@@ -124,7 +127,7 @@ TTS_INFERENCE_ENDPOINT=http://localhost:8081/v1/audio/speech/stream
 
 ## Soprano Inference Service (CPU)
 
-`soprano/` provides a dedicated inference microservice for the Soprano-1.1-80M model, exposing `/v1/audio/speech` and `/health` via a FastAPI + Granian stack. The API **streams audio chunks** in WAV format at 32kHz sample rate (which is the default for this model) to the client as they are generated, drastically reducing Time-To-First-Audio (TTFA).
+`soprano/` provides a dedicated inference microservice for the Soprano-1.1-80M model, exposing `/v1/audio/speech/stream` and `/health` via a FastAPI + Granian stack. The API streams audio chunks in WAV format at 32kHz sample rate (which is the default for this model) to the client as they are generated, drastically reducing Time-To-First-Audio (TTFA).
 
 ### Latency-Focused Tooling And Optimizations
 
