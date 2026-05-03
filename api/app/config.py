@@ -83,14 +83,17 @@ async def lifespan(app: App):
     app.state.celery = Celery("api", broker=str(cfg.celery_broker_url), backend=str(cfg.celery_result_backend_url))
     # Ensure that the Celery connection is working before starting the application
     app.state.celery.connection().ensure_connection(max_retries=3, timeout=10)
-
+    logger.info("Connected to Celery")
     logger.info("Connecting to Postgres...")
     app.state.pg_engine = make_async_engine(to_async_url(str(cfg.database_url)))
     app.state.pg_sessionmaker = make_async_sessionmaker(app.state.pg_engine)
     async with app.state.pg_engine.connect() as conn:
         await conn.execute(text("select 1;"))  # Test the database connection
         await conn.commit()
+    logger.info("Connected to Postgres")
 
     yield  # The application will run until it is shut down
     app.state.celery.close()  # Clean up the Celery connection when the application is shutting down
+    logger.info("Disconnected from Celery.")
     await app.state.pg_engine.dispose()  # Clean up the database connection when the application is shutting down
+    logger.info("Disconnected from Postgres.")

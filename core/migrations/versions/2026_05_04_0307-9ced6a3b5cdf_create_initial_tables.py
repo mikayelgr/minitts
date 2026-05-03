@@ -1,8 +1,8 @@
 """create initial tables
 
-Revision ID: d16a894bb0fb
+Revision ID: 9ced6a3b5cdf
 Revises: 
-Create Date: 2026-05-04 01:31:20.917415
+Create Date: 2026-05-04 03:07:40.401405
 
 """
 from typing import Sequence, Union
@@ -14,7 +14,7 @@ import sqlmodel.sql.sqltypes
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'd16a894bb0fb'
+revision: str = '9ced6a3b5cdf'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -34,7 +34,7 @@ def upgrade() -> None:
     op.create_table('jobs',
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('user_id', sa.Uuid(), nullable=False),
-    sa.Column('task_state', sa.Enum('CREATED', 'PENDING', 'SUCCESS', 'FAILURE', name='taskstate'), nullable=False),
+    sa.Column('task_state', sa.Enum('CREATED', 'PENDING', 'SUCCESS', 'FAILURE', name='jobstate'), nullable=False),
     sa.Column('text', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('callback_url', sqlmodel.sql.sqltypes.AutoString(length=2048), nullable=False),
     sa.Column('audio_url', sqlmodel.sql.sqltypes.AutoString(length=2048), nullable=True),

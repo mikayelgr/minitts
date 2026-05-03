@@ -3,7 +3,7 @@ import uuid
 
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import func, CheckConstraint, Column, DateTime, Enum
-from core.tasks import TaskState
+from core.tasks import JobState
 from enum import StrEnum
 
 
@@ -61,8 +61,8 @@ class Job(SQLModel, table=True):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="users.id", nullable=False)
-    state: TaskState = Field(
-        sa_column=Column(Enum(TaskState), nullable=False, default=TaskState.CREATED, name="task_state"),
+    state: JobState = Field(
+        sa_column=Column(Enum(JobState), nullable=False, default=JobState.CREATED, name="task_state"),
     )
     text: str = Field(nullable=False, min_length=2)
     # Most modern browsers support URLs up to around 2000 characters, so we set 2048

@@ -117,6 +117,9 @@ and `api/` packages accordingly:
 CELERY_BROKER_URL=amqp://guest:guest@localhost:5672/
 CELERY_RESULT_BACKEND_URL=redis://localhost:6379/0
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
+
+# Only for `celeryz/` package
+TTS_INFERENCE_ENDPOINT=http://localhost:8081/v1/audio/speech/stream
 ```
 
 ## Soprano Inference Service (CPU)

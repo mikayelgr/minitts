@@ -1,11 +1,10 @@
-from pydantic import BaseModel
+from . import *
 from enum import StrEnum
-from typing import ClassVar
 
 
-class TaskState(StrEnum):
+class JobState(StrEnum):
     """
-    Enum representing the state of a task.
+    Enum representing the state of a job.
     """
 
     CREATED = "created"
@@ -14,11 +13,6 @@ class TaskState(StrEnum):
     FAILURE = "failure"
 
 
-class TaskContract:
-    """
-    Base model for a task, containing common fields.
-    """
-
-    name: ClassVar[str]
-    Payload: type[BaseModel]
-    Result: type[BaseModel]
+class JobDefinition(StrEnum):
+    TTS_SYNTHESIZE = "tts.synthesize"
+    TTS_REFUND = "tts.refund"

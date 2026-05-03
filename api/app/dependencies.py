@@ -1,8 +1,24 @@
 from typing import AsyncGenerator
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from celery import Celery
 
 from .config import get_state, AppState
+
+
+def get_celery_app(request: Request) -> Celery:
+    """
+    Dependency that provides access to the Celery application instance.
+    This can be used in routes or other dependencies to enqueue tasks.
+
+    Usage in route:
+        @router.get("/example")
+        async def my_route(celery_app = Depends(get_celery_app)):
+            # Use celery_app here
+            pass
+    """
+    app_state: AppState = get_state(request.app)
+    return app_state.celery
 
 
 async def get_pg_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
