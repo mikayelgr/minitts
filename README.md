@@ -21,7 +21,7 @@ This architecture is designed for reliability and scale: API traffic remains res
 
 The API accepts a TTS job, persists it to Postgres, and dispatches a Celery task through RabbitMQ. A worker consumes the task, calls the Soprano inference service, streams audio bytes back, updates the job row, stores the result in Redis (Celery's result backend), and posts a webhook to the client's callback URL.
 
-![MiniTTS architecture](misc/docs/minitts_architecture_v4.svg)
+![MiniTTS architecture](docs/assets/minitts_architecture_v4.svg)
 
 Producer (API) and consumer (worker) are intentionally decoupled through the broker, hence, the API can accept and queue work even when no worker is currently running, and worker restarts do not affect API availability.
 
