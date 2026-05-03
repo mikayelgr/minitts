@@ -32,11 +32,11 @@ def make_async_sessionmaker(engine: AsyncEngine):
     """Create an asynchronous SQLAlchemy sessionmaker."""
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    return async_sessionmaker(bind=engine)
+    return async_sessionmaker(bind=engine, expire_on_commit=False)
 
 
 def make_sync_sessionmaker(engine: Engine):
     """Create a synchronous SQLAlchemy sessionmaker."""
     from sqlalchemy.orm import sessionmaker
 
-    return sessionmaker(bind=engine)
+    return sessionmaker(bind=engine, expire_on_commit=False)

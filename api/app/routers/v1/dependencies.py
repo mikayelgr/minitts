@@ -2,8 +2,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi import Depends, HTTPException
 from http import HTTPStatus
 from app.dependencies import get_pg_session, AsyncSession
-from core.db.models import User
-from sqlalchemy import select
+import core.db.queries.users
 import logging
 from typing import Annotated
 
@@ -28,15 +27,6 @@ async def authenticate(
             headers={"WWW-Authenticate": "Basic"},
         )
 
-    # Check if the user exists in the database, if not create it
-    result = await pg.execute(select(User).where(User.username == credentials.username))
-    user = result.scalars().first()
-    if not user:
-        user = User(username=credentials.username)
-        pg.add(user)
-        await pg.commit()
-        logger.info(f"Created new user: {credentials.username}")
-        await pg.refresh(user)  # doing this to get the generated ID from the database
-        logger.info(f"User ID: {user.id}")
-
+    user = await core.db.queries.users.get_or_create_user(pg, credentials.username)
+    await pg.commit()  # Commit the transaction to save the user if it was created
     return user
