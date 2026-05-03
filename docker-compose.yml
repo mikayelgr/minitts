@@ -113,8 +113,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      soprano:
-        condition: service_healthy
+      # The API doesn't really depend on soprano to be healthy. We only need the queues and result
+      # backends.
+      # soprano:
+      #   condition: service_healthy
       alembic-migrate:
         condition: service_completed_successfully
       # NOTE: api should NOT depend on celeryz. The whole point of the broker
