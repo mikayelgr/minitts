@@ -133,5 +133,3 @@ TTS_INFERENCE_ENDPOINT=http://localhost:8081/v1/audio/speech/stream
 
 - Granian provides a low-latency, Rust-backed ASGI server for Python apps (benchmarks: <https://github.com/emmett-framework/granian/blob/master/benchmarks/vs.md>).
 - `uvloop` is used as the event loop to reduce request overhead (benchmarks: <https://github.com/MagicStack/uvloop#performance>).
-- Worker and thread counts are configurable via `WORKERS` and `THREADS` to tune concurrency.
-- Optional model warm-up at startup (`WARMUP_ON_STARTUP=1`) runs an inference per worker on varied data out of `warmup_data/` to avoid first-request cold starts.
