@@ -41,13 +41,31 @@ This means the repository is already aligned with the requested stack direction 
 ## Quick Start
 
 1. Ensure Docker is installed and runs locally.
-2. From the project root, start the stack:
+2. From the project root, build and run the **full setup** which configures MiniTTS end-to-end:
 
    ```bash
-   docker compose up --build
+   docker compose up -d --build
    ```
 
-3. Open the local gateway in your browser:
+3. **If you need host ports during development**, use the development-only compose overlay:
+
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d redis rabbitmq postgres
+   ```
+
+   This command keeps the base stack unchanged and only publishes the ports for your local machine while you are developing.
+
+   The overlay publishes:
+
+- Redis on `localhost:6379`
+- Postgres on `localhost:5432`
+- RabbitMQ AMQP on `localhost:5672`
+
+## Developer-friendly Gateway for All Services
+
+> Note: This part assumes that you've run the **full setup** as indicated in the previous section.
+
+1. Open the local gateway in your browser:
 
    ```text
    http://localhost:3000
@@ -61,7 +79,7 @@ This means the repository is already aligned with the requested stack direction 
    - RabbitMQ: <http://rabbitmq.localhost:3000>, the broker UI for viewing message queues and worker traffic.
    - pgAdmin: <http://pgadmin.localhost:3000>, a database admin UI for browsing and managing Postgres.
 
-4. Verify API health:
+2. Verify API health:
 
    ```bash
    curl http://api.localhost:3000/health
@@ -70,7 +88,7 @@ This means the repository is already aligned with the requested stack direction 
 
    The health of the remaining services is handled by Docker and the corresponding images.
 
-5. Stop all services:
+3. Stop all services:
 
    ```bash
    docker compose down
@@ -90,6 +108,16 @@ The current Compose stack starts these services:
 - `pgadmin`: a Postgres UI for inspecting tables and managing the database.
 
 Note: the repository currently contains Celery worker code under `celeryz/`, but the worker service is not yet added to the Compose file.
+
+For local development against the Dockerized infrastructure from the host machine, you
+need to configure these environment variables in the `.env` files of `celeryz/`, `core/`,
+and `api/` packages accordingly:
+
+```text
+CELERY_BROKER_URL=amqp://guest:guest@localhost:5672/
+CELERY_RESULT_BACKEND_URL=redis://localhost:6379/0
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
+```
 
 ## Soprano Inference Service (CPU)
 
