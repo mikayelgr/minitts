@@ -16,9 +16,30 @@ pgadmin.localhost:80 {
 }
 
 api.localhost:80 {
-	reverse_proxy api:8080
+	reverse_proxy {
+		dynamic a {
+			name api
+			port 8080
+			refresh 5s
+		}
+		# Use round-robin among the resolved api service IPs
+		lb_policy round_robin
+		transport http {
+			keepalive 0
+		}
+	}
 }
 
 soprano-inference.localhost:80 {
-	reverse_proxy soprano:8081
+	reverse_proxy {
+		dynamic a {
+			name soprano
+			port 8081
+			refresh 5s
+		}
+		lb_policy round_robin
+		transport http {
+			keepalive 0
+		}
+	}
 }
