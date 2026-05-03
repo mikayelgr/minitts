@@ -93,7 +93,7 @@ services:
       timeout: 5s
       retries: 6
       # Model load + warmup is slow. Don't count failures during this window.
-      start_period: 120s
+      start_period: 20s
 
   api:
     build:
