@@ -1,6 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from http import HTTPStatus
 from pydantic import BaseModel, Field, HttpUrl
+from app.dependencies import get_pg_session, AsyncSession
+from core.db.models import User
+from .dependencies import authenticate
+from typing import Annotated
 
 router = APIRouter(prefix="/tts")
 
@@ -40,7 +44,10 @@ class CreateTTSJobRequest(BaseModel):
 
 
 @router.post("/", status_code=HTTPStatus.ACCEPTED, response_model=CreateTTSJobResponse)
-async def submit(request: CreateTTSJobRequest):
+async def submit(
+    pg: Annotated[AsyncSession, Depends(get_pg_session)],
+    user: Annotated[User, Depends(authenticate)],
+):
     """
     This endpoint is responsible for accepting TTS inference requests. It validates the input payload
     and enqueues a TTS job for asynchronous processing. Once the job is complete, the server will POST

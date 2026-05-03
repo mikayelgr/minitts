@@ -6,6 +6,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 import logging
 from contextlib import asynccontextmanager
 from celery import Celery
+from core.db.engine import make_async_engine, AsyncEngine, to_async_url, make_async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +19,8 @@ class AppState:
     """
 
     celery: Celery
+    pg_engine: AsyncEngine
+    pg_sessionmaker: async_sessionmaker[AsyncSession]
 
 
 class App(FastAPI):
@@ -79,5 +84,13 @@ async def lifespan(app: App):
     # Ensure that the Celery connection is working before starting the application
     app.state.celery.connection().ensure_connection(max_retries=3, timeout=10)
 
+    logger.info("Connecting to Postgres...")
+    app.state.pg_engine = make_async_engine(to_async_url(str(cfg.database_url)))
+    app.state.pg_sessionmaker = make_async_sessionmaker(app.state.pg_engine)
+    async with app.state.pg_engine.connect() as conn:
+        await conn.execute(text("select 1;"))  # Test the database connection
+        await conn.commit()
+
     yield  # The application will run until it is shut down
     app.state.celery.close()  # Clean up the Celery connection when the application is shutting down
+    await app.state.pg_engine.dispose()  # Clean up the database connection when the application is shutting down
