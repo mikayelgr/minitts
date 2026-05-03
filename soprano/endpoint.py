@@ -2,7 +2,7 @@ import asyncio
 import warnings
 import io
 import wave
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Body, HTTPException
 from fastapi.responses import StreamingResponse
 from soprano import SopranoTTS
 from contextlib import asynccontextmanager
@@ -90,11 +90,14 @@ async def health_check():
     return {"status": "ok"}
 
 
-@app.get("/v1/audio/speech/stream", response_class=AudioStreamingResponse)
-async def stream_speech(text: str = Query()) -> AsyncIterable[bytes]:
+@app.post("/v1/audio/speech/stream", response_class=AudioStreamingResponse)
+async def stream_speech(text: str = Body(..., media_type="text/plain")) -> AsyncIterable[bytes]:
     """
     Stream the generated speech audio for the given text.
     """
+    text = text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Request body must contain text to synthesize.")
 
     # Generate and yield the WAV header first.
     yield get_wav_header(
