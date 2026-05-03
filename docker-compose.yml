@@ -85,6 +85,9 @@ services:
   soprano:
     build:
       context: ./soprano
+    # environment:
+    #   - OMP_NUM_THREADS=2
+    #   - MKL_NUM_THREADS=2
     healthcheck:
       # The soprano container has python+requests via its deps; this avoids
       # adding curl/wget to the slim image just for healthchecks.

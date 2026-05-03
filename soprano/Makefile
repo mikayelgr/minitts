@@ -6,7 +6,7 @@ start:
 			--no-reload \
 			--no-ws \
 			--metrics \
-			--runtime-threads 8 \
+			--runtime-threads 4 \
 			endpoint:app
 
 preload:
