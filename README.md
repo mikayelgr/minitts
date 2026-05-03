@@ -1,8 +1,6 @@
 # MiniTTS
 
-MiniTTS is a production-minded foundation for an asynchronous Text-to-Speech service based on the [Soprano-1.1-80M](https://huggingface.co/ekwek/Soprano-1.1-80M) model.
-
-For inference, the service runs the Soprano model on CPU, served behind [Granian](https://github.com/emmett-framework/granian) as the Rust-based inference server.
+MiniTTS is a production-minded foundation for an asynchronous Text-to-Speech service based on the [Soprano-1.1-80M](https://huggingface.co/ekwek/Soprano-1.1-80M) model. For inference, the service runs the Soprano model on CPU, served behind [Granian](https://github.com/emmett-framework/granian) as the Rust-based inference server. Throughout the project you may see various Rust-based libraries like [pyreqwest](https://markussintonen.github.io/pyreqwest/pyreqwest.html), which I used in order to maximize the performance by minimizing the overhead caused by things like HTTP parsing, processing, construction, validation etc.
 
 ## What This Project Aims To Accomplish
 
