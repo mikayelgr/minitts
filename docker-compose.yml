@@ -7,15 +7,18 @@ services:
     volumes:
       - ./misc/Caddyfile:/etc/caddy/Caddyfile
       - ./misc/index.html:/usr/share/caddy/index.html
-    depends_on:
-      api:
-        condition: service_started
-      redisinsight:
-        condition: service_started
-      rabbitmq:
-        condition: service_healthy
-      pgadmin:
-        condition: service_started
+    # In reality, Caddy can start before any service is fully healthy, because health monitoring
+    # in this should be done by the developer and the portal is for convenience only.
+    #
+    # depends_on:
+    #   api:
+    #     condition: service_started
+    #   redisinsight:
+    #     condition: service_started
+    #   rabbitmq:
+    #     condition: service_healthy
+    #   pgadmin:
+    #     condition: service_started
 
   redis:
     image: redis:7.2
