@@ -19,6 +19,7 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
 
     # Relationships
+    jobs: list["Job"] = Relationship(back_populates="user")
     quota_events: list["QuotaUsageEvent"] = Relationship(back_populates="user")
 
 
@@ -51,7 +52,24 @@ class Job(SQLModel, table=True):
     __tablename__ = "jobs"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(foreign_key="users.id", nullable=False)
     state: TaskState = Field(sa_column=Column(Enum(TaskState), nullable=False, default=TaskState.CREATED))
-    created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
+    text: str = Field(nullable=False, min_length=2)
+    # Most modern browsers support URLs up to around 2000 characters, so we set 2048
+    # as the max length for callback URLs.
+    callback_url: str = Field(nullable=False, max_length=2048)
+    audio_url: str | None = Field(default=None, max_length=2048)
+    duration_seconds: float | None = Field(default=0.0, gt=0)
+    error: str | None = Field(default=None, min_length=1)
 
+    created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
+    started_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    completed_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    webhook_delivered_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    webhook_attempts: int = Field(default=0, nullable=False, gt=0)
+
+    # Relationships
+    user: "User" = Relationship(back_populates="jobs")
     associated_quota_usage_events: list["QuotaUsageEvent"] = Relationship(back_populates="job")
