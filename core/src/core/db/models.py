@@ -4,6 +4,7 @@ import uuid
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import func, CheckConstraint, Column, DateTime, Enum
 from core.tasks import TaskState
+from enum import StrEnum
 
 
 class User(SQLModel, table=True):
@@ -23,6 +24,11 @@ class User(SQLModel, table=True):
     quota_events: list["QuotaUsageEvent"] = Relationship(back_populates="user")
 
 
+class UsageEventType(StrEnum):
+    USAGE = "USAGE"
+    REFUND = "REFUND"
+
+
 class QuotaUsageEvent(SQLModel, table=True):
     """
     Represents an event where a user consumes quota tokens, associated with a job.
@@ -32,7 +38,9 @@ class QuotaUsageEvent(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     amount: int = Field(nullable=False, gt=0)  # Ensure amount is positive
-    quota_type: str = Field(nullable=False, max_length=50)
+    event_type: UsageEventType = Field(
+        sa_column=Column(Enum(UsageEventType), nullable=False, name="usage_event_type"),
+    )
     job_id: uuid.UUID = Field(foreign_key="jobs.id", nullable=False)
     user_id: uuid.UUID = Field(foreign_key="users.id", nullable=False)
 
@@ -53,7 +61,9 @@ class Job(SQLModel, table=True):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="users.id", nullable=False)
-    state: TaskState = Field(sa_column=Column(Enum(TaskState), nullable=False, default=TaskState.CREATED))
+    state: TaskState = Field(
+        sa_column=Column(Enum(TaskState), nullable=False, default=TaskState.CREATED, name="task_state"),
+    )
     text: str = Field(nullable=False, min_length=2)
     # Most modern browsers support URLs up to around 2000 characters, so we set 2048
     # as the max length for callback URLs.
