@@ -13,3 +13,9 @@ services:
   postgres:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
+
+  seaweedfs:
+    ports:
+      - "${SEAWEEDFS_S3_ENDPOINT_PORT:-8333}:8333"
+      - "${SEAWEEDFS_MASTER_UI_PORT:-9333}:9333"
+      - "${SEAWEEDFS_FILER_UI_PORT:-8888}:8888"

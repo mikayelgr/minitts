@@ -144,6 +144,8 @@ services:
         condition: service_healthy
       alembic-migrate:
         condition: service_completed_successfully
+      seaweedfs:
+        condition: service_healthy
 
   alembic-migrate:
     build:
@@ -155,7 +157,18 @@ services:
       postgres:
         condition: service_healthy
 
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.23
+    command: mini -s3
+    volumes:
+      - seaweedfs_data:/data
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=secret
+      - S3_BUCKET=minitts
+
 volumes:
   redis_data:
   postgres_data:
   rabbitmq_data:
+  seaweedfs_data:

@@ -17,7 +17,7 @@ This architecture is designed for reliability and scale: API traffic remains res
 
 ## Architecture
 
-The API accepts a TTS job, persists it to Postgres, and dispatches a Celery task through RabbitMQ. A worker consumes the task, calls the Soprano inference service, streams audio bytes back, updates the job row, stores the result in Redis (Celery's result backend), and posts a webhook to the client's callback URL.
+The API accepts a TTS job, persists it to Postgres, and dispatches a Celery task through RabbitMQ. A worker consumes the task, calls the Soprano inference service, streams audio bytes back, updates the job row, stores the job result in Redis (Celery's result backend) and the inference result is stored in SeaweedFS as WAV audio file, and webhook post request is sent to the client's callback URL containing the audio URL of the generated file.
 
 ![MiniTTS architecture](docs/assets/minitts_architecture_v6.svg)
 
@@ -31,7 +31,7 @@ Current codebase already provides the initial building blocks:
 - Health endpoint at `GET /health` for all HTTP-exposed packages.
 - TTS submission endpoint at `POST /v1/tts`.
 - Environment-based configuration for Redis and Postgres.
-- Docker Compose stack for Caddy, Redis, RedisInsight, RabbitMQ, Postgres, pgAdmin, the MiniTTS API container, the Celery worker container, the Soprano inference engine + API, as well as a small container which runs the intial Alembic migrations automatically on start.
+- Docker Compose stack for Caddy, Redis, RedisInsight, RabbitMQ, SeaweedFS, Postgres, pgAdmin, the MiniTTS API container, the Celery worker container, the Soprano inference engine + API, as well as a small container which runs the intial Alembic migrations automatically on start.
 - A developer-friendly landing page at `http://localhost:3000` that links to the main service subdomains.
 
 Currently implemented HTTP surface includes:
@@ -53,7 +53,7 @@ Currently implemented HTTP surface includes:
 3. If you need host ports during development, use the development-only compose overlay:
 
    ```bash
-   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d redis rabbitmq postgres
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d redis rabbitmq postgres seaweedfs
    ```
 
    This command keeps the base stack unchanged and only publishes the ports for your local machine while you are developing.
@@ -63,6 +63,11 @@ Currently implemented HTTP surface includes:
    - Redis on `localhost:6379`
    - Postgres on `localhost:5432`
    - RabbitMQ AMQP on `localhost:5672`
+
+   - SeaweedFS
+      - Master UI on `localhost:9333`
+      - Filer UI on `localhost:8888`
+      - S3 Endpoint on `localhost:8333`
 
 ## Developer-friendly Gateway for All Services
 
@@ -119,8 +124,13 @@ CELERY_BROKER_URL=amqp://guest:guest@localhost:5672/
 CELERY_RESULT_BACKEND_URL=redis://localhost:6379/0
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
 
-# Only for `celeryz/` package
+# Additional variables only for `celeryz/` package
 TTS_INFERENCE_ENDPOINT=http://localhost:8081/v1/audio/speech/stream
+## Assuming default SeaweedFS has been deployed from the provided Docker compose stack
+AWS_ACCESS_KEY_ID=access_key
+AWS_SECRET_ACCESS_KEY=secret
+S3_BUCKET=minitts
+S3_ENDPOINT_URL=http://localhost:8333
 ```
 
 ## Soprano Inference Service (CPU)
