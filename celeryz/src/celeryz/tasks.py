@@ -25,7 +25,7 @@ validation_config = ConfigDict(extra="allow", strict=True, arbitrary_types_allow
     bind=True,
     max_retries=5,
     retry_backoff=True,
-    retry_backoff_max=60 * 30,  # 30 minutes
+    retry_backoff_max=60 * 10,  # 10 minutes
 )
 @validate_call(config=validation_config)
 def refund_tts_job(self: Task, job_id: StrictInt, user_id: StrictInt, amount: StrictInt):
@@ -34,10 +34,15 @@ def refund_tts_job(self: Task, job_id: StrictInt, user_id: StrictInt, amount: St
     # Implement refund logic here, e.g., update job status, process payment refund, etc.
 
 
-@app.task(name=JobDefinition.TTS_SYNTHESIZE, bind=True, max_retries=5)
+@app.task(
+    name=JobDefinition.TTS_SYNTHESIZE,
+    bind=True,
+    max_retries=5,
+    retry_backoff=True,
+    retry_backoff_max=60 * 30,  # 30 minutes
+)
 @validate_call(config=validation_config)
 def synthesize_audio(self: Task, job: dict):
-    self.update_state(state="")
     try:
         # Ensuring that the input dictionary strictly adheres to the Job model schema
         # before processing the task.
