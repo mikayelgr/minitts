@@ -11,6 +11,14 @@ rabbitmq.localhost:80 {
 	reverse_proxy rabbitmq:15672
 }
 
+seaweedfs-master-ui.localhost:80 {
+	reverse_proxy seaweedfs:9333
+}
+
+seaweedfs-filer-ui.localhost:80 {
+	reverse_proxy seaweedfs:8888
+}
+
 pgadmin.localhost:80 {
 	reverse_proxy pgadmin:80
 }
