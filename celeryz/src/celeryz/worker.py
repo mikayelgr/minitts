@@ -4,6 +4,7 @@ from pydantic import RedisDsn, AmqpDsn, HttpUrl, PostgresDsn, Field
 from core.db.engine import make_sync_engine, to_sync_url
 import boto3
 import logging
+from botocore.exceptions import ClientError
 
 logging.basicConfig(level=logging.INFO)
 
@@ -39,9 +40,23 @@ aws_session = boto3.Session(
     aws_access_key_id=settings.aws_access_key_id,
     aws_secret_access_key=settings.aws_secret_access_key,
 )
-s3_client = aws_session.client("s3", endpoint_url=str(settings.s3_endpoint_url))
-# Test the connection to S3 at startup, will raise an error if it fails
-buckets = s3_client.list_buckets()
+s3 = aws_session.client("s3", endpoint_url=str(settings.s3_endpoint_url))
+try:
+    if s3.get_public_access_block(Bucket=settings.s3_bucket)["PublicAccessBlockConfiguration"]["BlockPublicAcls"]:
+        # Ensure the bucket is publicly accessible by removing any public access blocks.
+        r = s3.delete_public_access_block(Bucket=settings.s3_bucket)
+        if r["ResponseMetadata"]["HTTPStatusCode"] >= 200 and r["ResponseMetadata"]["HTTPStatusCode"] < 300:
+            logger.info(f"Removed public access block from S3 bucket {settings.s3_bucket}")
+        else:
+            logger.error(f"Failed to remove public access block from S3 bucket {settings.s3_bucket}: response={r}")
+            raise
+except ClientError as e:
+    if "notimplemented" in str(e).lower():
+        logger.warning(
+            f"S3 endpoint {settings.s3_endpoint_url} does not support public access block configuration, skipping this step."
+        )
+    else:
+        raise e
 logger.info("Connected to S3")
 
 

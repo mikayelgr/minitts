@@ -81,5 +81,5 @@ async def submit(
     )
     await session.commit()
 
-    celery.send_task(JobDefinition.TTS_SYNTHESIZE, job.model_dump(mode="python"))
+    celery.send_task(JobDefinition.TTS_SYNTHESIZE, job_id=str(job.id))
     return job

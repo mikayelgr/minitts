@@ -9,6 +9,7 @@ class JobState(StrEnum):
 
     CREATED = "created"
     PENDING = "pending"
+    EXECUTING = "executing"
     SUCCESS = "success"
     FAILURE = "failure"
 
