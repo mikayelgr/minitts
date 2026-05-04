@@ -119,6 +119,11 @@ def synthesize_audio(self: Task, job_id: str):
             job.state = JobState.PENDING
             job.error = f"Failed to upload audio to S3: {str(e)}"
             session.commit()
+            try:
+                s3.delete_object(Bucket=settings.s3_bucket, Key=file_key)  # Clean up any partial uploads
+            except Exception as cleanup_error:
+                logger.error(f"Error occurred while cleaning up partial S3 upload for job={job.id}: {cleanup_error}")
+                pass  # If cleanup fails, we log it but do not raise an exception since the main error is the upload failure
             raise self.retry(exc=e)
 
         job.audio_url = f"{settings.s3_endpoint_url}/{settings.s3_bucket}/{file_key}"
