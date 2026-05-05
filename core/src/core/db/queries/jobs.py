@@ -1,9 +1,12 @@
-from sqlalchemy import update
+from sqlalchemy import select
+from sqlalchemy.exc import DataError
 from sqlalchemy.orm.session import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.db.models import Job, User, JobState
-from sqlmodel import func, update, select
 from uuid import UUID
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 async def create_job(session: AsyncSession, user: User, partial_job: Job) -> Job:
@@ -29,8 +32,15 @@ def lock_job_for_processing(session: Session, job_id: UUID) -> Job | None:
         )
         .limit(1)
     )
-    job = session.execute(stmt).scalar_one_or_none()  # At this point if a job exists it is now locked for processing
-    if job is None:
+    try:
+        # At this point if a job exists it is now locked for processing. One failure point here
+        # is if the user passes a string which is not a valid UUID which can cause an exception
+        # so we must ensure that we handle it properly.
+        job = session.execute(stmt).scalar_one_or_none()
+        return job
+    except DataError as e:
+        # In case the user provided an invalid UUID string, we return none early
         return None
-
-    return job
+    except Exception as e:
+        logger.error(f"Unexpected error while locking job with id={job_id} for processing: {e}")
+        return None

@@ -44,15 +44,15 @@ def refund_tts_job(self: Task, job_id: StrictInt, user_id: StrictInt, amount: St
     retry_backoff_max=60 * 30,  # 30 minutes
 )
 @validate_call(config=validation_config)
-def synthesize_audio(self: Task, job_id: str):
+def synthesize_audio(self: Task, job_id: str, quota_event_id: str):
     with Session() as session:
         # Attempt to lock the job for processing. If the job is already being processed by another worker,
         # we log a warning and exit gracefully.
         job = lock_job_for_processing(session, job_id=job_id)
         if not job:
-            logger.warning(f"Job with id={job_id} is already being processed by another worker.")
             return
 
+        # Updating job state and commiting it to the database
         job.state = JobState.EXECUTING
         job.started_at = func.now()
         session.commit()
