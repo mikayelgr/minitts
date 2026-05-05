@@ -1,7 +1,7 @@
 import boto3
 from botocore.exceptions import ClientError
 import logging
-from pydantic import validate_call
+from pydantic import validate_call, HttpUrl
 from types_boto3_s3 import S3Client
 
 logger = logging.getLogger(__name__)
@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 def create_s3_client(
     aws_access_key_id: str,
     aws_secret_access_key: str,
-    s3_endpoint_url: str,
+    s3_endpoint_url: HttpUrl,
     s3_bucket: str,
 ) -> S3Client:
     aws_session = boto3.Session(
@@ -31,8 +31,8 @@ def create_s3_client(
             logger.error(f"Unhandled S3 error occurred while accessing or creating bucket {s3_bucket}: {str(e)}")
             raise e
 
-    s3_client = aws_session.client("s3", endpoint_url=str(s3_endpoint_url))
     try:
+        s3_client = aws_session.client("s3", endpoint_url=str(s3_endpoint_url))
         if s3_client.get_public_access_block(Bucket=s3_bucket)["PublicAccessBlockConfiguration"]["BlockPublicAcls"]:
             # Ensure the bucket is publicly accessible by removing any public access blocks.
             r = s3_client.delete_public_access_block(Bucket=s3_bucket)
