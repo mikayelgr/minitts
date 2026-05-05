@@ -1,6 +1,6 @@
 # MiniTTS
 
-[![Run Unit Tests](https://github.com/mikayelgr/minitts/actions/workflows/run-unit-test.yml/badge.svg)](https://github.com/mikayelgr/minitts/actions/workflows/run-unit-test.yml)
+[![CI](https://github.com/mikayelgr/minitts/actions/workflows/ci.yml/badge.svg)](https://github.com/mikayelgr/minitts/actions/workflows/ci.yml)
 
 MiniTTS is a production-minded foundation for an asynchronous Text-to-Speech service based on the [Soprano-1.1-80M](https://huggingface.co/ekwek/Soprano-1.1-80M) model. For inference, the service runs the Soprano model on CPU, served behind [Granian](https://github.com/emmett-framework/granian) as the Rust-based inference server. Throughout the project you may see various Rust-based libraries like [pyreqwest](https://markussintonen.github.io/pyreqwest/pyreqwest.html), which I used in order to maximize the performance by minimizing the overhead caused by things like HTTP parsing, processing, construction, validation etc.
 
