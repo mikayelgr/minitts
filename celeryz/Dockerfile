@@ -17,4 +17,4 @@ WORKDIR /container/celeryz
 
 # installing the dependencies globally so that they are available for the entire project
 RUN uv sync --frozen --no-dev
-CMD [ "sh", "-c", "celery -A celeryz.worker:app worker --loglevel=info" ]
+CMD [ "sh", "-c", "celery -A celeryz.worker:main worker --loglevel=info" ]

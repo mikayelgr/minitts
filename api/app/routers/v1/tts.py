@@ -72,7 +72,7 @@ async def submit(
         ),
     )
 
-    await core.db.queries.quotas.create_quota_usage_event(
+    quota_usage_event = await core.db.queries.quotas.create_quota_usage_event(
         session,
         user,
         job,
@@ -81,5 +81,10 @@ async def submit(
     )
     await session.commit()
 
-    celery.send_task(JobDefinition.TTS_SYNTHESIZE, job_id=str(job.id))
+    celery.send_task(
+        JobDefinition.TTS_SYNTHESIZE,
+        job_id=str(job.id),
+        quota_usage_event_id=str(quota_usage_event.id),
+    )
+
     return job
