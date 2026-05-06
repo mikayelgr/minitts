@@ -20,6 +20,7 @@ class CeleryWorkerConfig(BaseSettings):
 
     s3_bucket: str = Field(..., min_length=3)
     s3_endpoint_url: HttpUrl
+    s3_public_endpoint_url: HttpUrl
     aws_access_key_id: str = Field(..., min_length=1)
     aws_secret_access_key: str = Field(..., min_length=1)
 

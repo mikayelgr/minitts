@@ -151,6 +151,7 @@ AWS_ACCESS_KEY_ID=admin
 AWS_SECRET_ACCESS_KEY=secret
 S3_BUCKET=minitts
 S3_ENDPOINT_URL=http://localhost:8333
+S3_PUBLIC_ENDPOINT_URL=http://seaweedfs-s3.localhost:3000
 ```
 
 ## Soprano Inference Service (CPU)

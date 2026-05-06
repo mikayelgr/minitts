@@ -67,6 +67,7 @@ def synthesize_audio(self: Task, job_id: str, quota_usage_event_id: int):
                     s3_client=s3_client,
                     s3_bucket=settings.s3_bucket,
                     s3_endpoint=settings.s3_endpoint_url,
+                    s3_public_endpoint=settings.s3_public_endpoint_url,
                     tts_inference_endpoint=settings.tts_inference_endpoint,
                 ),
             )

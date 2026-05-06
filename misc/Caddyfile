@@ -14,7 +14,9 @@ rabbitmq.localhost:80 {
 seaweedfs-master-ui.localhost:80 {
 	reverse_proxy seaweedfs:9333
 }
-
+seaweedfs-s3.localhost:80 {
+	reverse_proxy seaweedfs:8333
+}
 seaweedfs-filer-ui.localhost:80 {
 	reverse_proxy seaweedfs:8888
 }

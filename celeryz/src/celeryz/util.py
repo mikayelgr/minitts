@@ -43,6 +43,7 @@ class GenerateAudioDeps(BaseModel):
     s3_client: Any  # We use Any here because the S3Client type from types_boto3_s3 is not recognized as a valid type by Pydantic, even though it is the correct type for our S3 client instance.
     s3_bucket: StrictStr
     s3_endpoint: HttpUrl
+    s3_public_endpoint: HttpUrl
     tts_inference_endpoint: HttpUrl
 
     # We need to do this since S3Client is recognized as an arbitrary type
@@ -112,7 +113,7 @@ def generate_audio(session: Session, deps: GenerateAudioDeps):
 
             raise RetryableError(str(e))
 
-    job.audio_url = url_normalize(f"{deps.s3_endpoint}/{deps.s3_bucket}/{file_key}")
+    job.audio_url = url_normalize(f"{deps.s3_public_endpoint}/{deps.s3_bucket}/{file_key}")
     job.state = JobState.SUCCESS
     job.completed_at = func.now()
     job.error = None
