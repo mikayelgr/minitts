@@ -13,9 +13,9 @@ ENV UV_PROJECT_ENVIRONMENT=/usr/local
 COPY . .
 RUN uv sync --frozen --no-dev
 # installing just
-RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /bin/
+RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /soprano
 # Pre-downloading the model weights to not waste startup time during runtime.
-RUN just preload
+RUN /soprano/just preload
 
 EXPOSE 8081
-CMD [ "just", "start" ]
+CMD [ "/soprano/just", "start" ]
