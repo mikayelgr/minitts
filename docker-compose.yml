@@ -27,9 +27,9 @@ services:
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   redisinsight:
     image: redislabs/redisinsight:3.4
@@ -49,16 +49,11 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      # `rabbitmq-diagnostics check_running` confirms the broker is up;
-      # `check_port_connectivity` confirms AMQP is actually accepting clients.
-      # The combo avoids the classic "container is up but AMQP not listening yet" race.
-      test: [ "CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity" ]
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
       interval: 10s
       timeout: 10s
-      retries: 12
-      # RabbitMQ takes a while to fully boot (Erlang VM + plugins).
-      # start_period suppresses failure counting during this window.
-      start_period: 30s
+      retries: 5
+      start_period: 20s
 
   postgres:
     image: postgres:17
@@ -166,6 +161,12 @@ services:
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=secret
       - S3_BUCKET=minitts
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:9333/ || exit 1" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
 volumes:
   redis_data:

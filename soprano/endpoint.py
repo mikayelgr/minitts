@@ -78,7 +78,7 @@ class EndpointApp(FastAPI):
     state: EndpointState
 
 
-app = EndpointApp(lifespan=lifespan)
+app = EndpointApp(lifespan=lifespan, title="Soprano Inference API", description="API for SopranoTTS inference")
 
 
 class AudioStreamingResponse(StreamingResponse):
