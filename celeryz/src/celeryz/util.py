@@ -13,6 +13,7 @@ from .exc import RetryableError, FatalError
 import httpx
 from httpx import BasicAuth
 from url_normalize import url_normalize
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARN)
@@ -56,7 +57,7 @@ def generate_audio(session: Session, deps: GenerateAudioDeps):
         return None  # Already being processed
 
     job.state = JobState.EXECUTING
-    job.started_at = func.now()
+    job.started_at = datetime.now(timezone.utc)
     session.commit()
 
     with httpx.stream(
@@ -115,7 +116,7 @@ def generate_audio(session: Session, deps: GenerateAudioDeps):
 
     job.audio_url = url_normalize(f"{deps.s3_public_endpoint}/{deps.s3_bucket}/{file_key}")
     job.state = JobState.SUCCESS
-    job.completed_at = func.now()
+    job.completed_at = datetime.now(timezone.utc)
     job.error = None
     session.commit()
     return job
@@ -135,7 +136,7 @@ def post_job_to_webhook(session: Session, job_id: str):
         response = httpx.post(str(job.callback_url), json=job.model_dump(mode="json"))
         response.raise_for_status()
 
-        job.webhook_delivered_at = func.now()
+        job.webhook_delivered_at = datetime.now(timezone.utc)
         session.commit()
     except httpx.RequestError as e:
         logger.error(f"HTTP request error when posting to webhook for job={job_id}: {e}")
