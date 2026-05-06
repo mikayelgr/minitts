@@ -38,15 +38,20 @@ def create_s3_client(
             r = s3_client.delete_public_access_block(Bucket=s3_bucket)
             if r["ResponseMetadata"]["HTTPStatusCode"] >= 200 and r["ResponseMetadata"]["HTTPStatusCode"] < 300:
                 logger.info(f"Removed public access block from S3 bucket {s3_bucket}")
-            else:
-                logger.error(f"Failed to remove public access block from S3 bucket {s3_bucket}: response={r}")
-                raise
     except ClientError as e:
         if "notimplemented" in str(e).lower():
-            logger.warning(
-                f"S3 endpoint {s3_endpoint_url} does not support public access block configuration, skipping this step."
-            )
+            logger.warning(f"S3 endpoint {s3_endpoint_url} does not support public access block configuration...")
+            logger.info(f"Attempting to set ACL to public-read for bucket {s3_bucket} as fallback")
+            try:
+                s3_resource.Bucket(s3_bucket).Acl().put(ACL="public-read")
+                logger.info(f"Set ACL to public-read for bucket {s3_bucket}")
+            except:
+                logger.error(
+                    f"Failed to set ACL to public-read for bucket {s3_bucket}. This may cause issues with webhook callbacks accessing the audio files."
+                )
+
         else:
             raise e
+
     logger.info("Connected to S3")
     return s3_client
