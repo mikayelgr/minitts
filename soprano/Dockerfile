@@ -12,10 +12,10 @@ ENV UV_PROJECT_ENVIRONMENT=/usr/local
 
 COPY . .
 RUN uv sync --frozen --no-dev
-# Cleaning up apt lists cache to minimize image size. This is especially important since the image
-RUN apt update -y && apt install build-essential -y && apt clean -y && rm -rf /var/lib/apt/lists/*
+# installing just
+RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /bin/
 # Pre-downloading the model weights to not waste startup time during runtime.
-RUN make preload
+RUN just preload
 
 EXPOSE 8081
-CMD [ "make", "start" ]
+CMD [ "just", "start" ]
