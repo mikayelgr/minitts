@@ -1,8 +1,8 @@
 """create initial tables
 
-Revision ID: c109c2e873b9
+Revision ID: 0a397fee305f
 Revises:
-Create Date: 2026-05-04 17:00:35.590593
+Create Date: 2026-05-06 18:07:50.127505
 
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 import sqlmodel.sql.sqltypes
 
 # revision identifiers, used by Alembic.
-revision: str = "c109c2e873b9"
+revision: str = "0a397fee305f"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -50,10 +50,7 @@ def upgrade() -> None:
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("webhook_delivered_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("webhook_attempts", sa.Integer(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["user_id"],
-            ["users.id"],
-        ),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
@@ -64,14 +61,8 @@ def upgrade() -> None:
         sa.Column("job_id", sa.Uuid(), nullable=False),
         sa.Column("user_id", sa.Uuid(), nullable=False),
         sa.CheckConstraint("amount > 0", name="check_positive_amount"),
-        sa.ForeignKeyConstraint(
-            ["job_id"],
-            ["jobs.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["user_id"],
-            ["users.id"],
-        ),
+        sa.ForeignKeyConstraint(["job_id"], ["jobs.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     # ### end Alembic commands ###

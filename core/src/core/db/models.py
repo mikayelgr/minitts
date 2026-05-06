@@ -20,8 +20,8 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
 
     # Relationships
-    jobs: list["Job"] = Relationship(back_populates="user")
-    quota_events: list["QuotaUsageEvent"] = Relationship(back_populates="user")
+    jobs: list["Job"] = Relationship(back_populates="user", cascade_delete=True)
+    quota_events: list["QuotaUsageEvent"] = Relationship(back_populates="user", cascade_delete=True)
 
 
 class UsageEventType(StrEnum):
@@ -41,8 +41,8 @@ class QuotaUsageEvent(SQLModel, table=True):
     event_type: UsageEventType = Field(
         sa_column=Column(Enum(UsageEventType), nullable=False, name="usage_event_type"),
     )
-    job_id: uuid.UUID = Field(foreign_key="jobs.id", nullable=False)
-    user_id: uuid.UUID = Field(foreign_key="users.id", nullable=False)
+    job_id: uuid.UUID = Field(foreign_key="jobs.id", nullable=False, ondelete="CASCADE")
+    user_id: uuid.UUID = Field(foreign_key="users.id", nullable=False, ondelete="CASCADE")
 
     # Table-level constraints & indexes
     __table_args__ = (CheckConstraint("amount > 0", name="check_positive_amount"),)
@@ -60,7 +60,7 @@ class Job(SQLModel, table=True):
     __tablename__ = "jobs"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    user_id: uuid.UUID = Field(foreign_key="users.id", nullable=False)
+    user_id: uuid.UUID = Field(foreign_key="users.id", nullable=False, ondelete="CASCADE")
     state: JobState = Field(
         sa_column=Column(Enum(JobState), nullable=False, default=JobState.CREATED, name="task_state"),
     )
@@ -82,4 +82,4 @@ class Job(SQLModel, table=True):
 
     # Relationships
     user: "User" = Relationship(back_populates="jobs")
-    associated_quota_usage_events: list["QuotaUsageEvent"] = Relationship(back_populates="job")
+    associated_quota_usage_events: list["QuotaUsageEvent"] = Relationship(back_populates="job", cascade_delete=True)
