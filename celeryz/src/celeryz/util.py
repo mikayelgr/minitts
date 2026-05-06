@@ -1,4 +1,4 @@
-from core.db.models import Job, JobState
+from core.db.models import Job, JobState, User, QuotaUsageEvent, UsageEventType
 from core.db.queries.jobs import lock_job_for_processing
 import time
 from sqlalchemy import func, select
@@ -6,6 +6,7 @@ from botocore.exceptions import ClientError
 import logging
 from sqlalchemy.orm import Session
 from typing import Any, cast
+import uuid
 from types_boto3_s3 import S3Client
 from pydantic import BaseModel, StrictStr, StrictInt, HttpUrl, ConfigDict
 from .exc import RetryableError, FatalError
@@ -140,3 +141,44 @@ def post_job_to_webhook(session: Session, job_id: str):
     except httpx.HTTPStatusError as e:
         logger.error(f"HTTP status error when posting to webhook for job={job_id}: {e}")
         raise RetryableError(f"HTTP status error: {e}")
+
+
+def process_refund(session: Session, job_id: str, quota_usage_event_id: int):
+    try:
+        original_event = session.execute(
+            select(QuotaUsageEvent).where(QuotaUsageEvent.id == quota_usage_event_id)
+        ).scalar_one_or_none()
+
+        if not original_event:
+            logger.error(f"Quota usage event {quota_usage_event_id} not found for job {job_id}")
+            return
+
+        existing_refund = session.execute(
+            select(QuotaUsageEvent).where(
+                QuotaUsageEvent.job_id == uuid.UUID(job_id), QuotaUsageEvent.event_type == UsageEventType.REFUND
+            )
+        ).scalar_one_or_none()
+
+        if existing_refund:
+            logger.warning(f"Refund already processed for job {job_id}")
+            return
+
+        user = session.execute(select(User).with_for_update().where(User.id == original_event.user_id)).scalar_one()
+
+        refund_event = QuotaUsageEvent(
+            amount=original_event.amount,
+            event_type=UsageEventType.REFUND,
+            job_id=original_event.job_id,
+            user_id=original_event.user_id,
+        )
+        session.add(refund_event)
+
+        user.quota_tokens_remaining += original_event.amount
+
+        session.commit()
+        logger.info(f"Successfully refunded {original_event.amount} tokens for job {job_id} to user {user.id}")
+
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Failed to refund job={job_id}: {e}")
+        raise e

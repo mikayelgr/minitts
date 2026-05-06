@@ -7,7 +7,7 @@ from celery import Task
 import logging
 from .main import pg_engine
 from core.db.engine import make_sync_sessionmaker
-from .util import generate_audio, GenerateAudioDeps, post_job_to_webhook
+from .util import generate_audio, GenerateAudioDeps, post_job_to_webhook, process_refund
 from .exc import RetryableError
 
 logger = logging.getLogger(__name__)
@@ -22,9 +22,11 @@ Session = make_sync_sessionmaker(pg_engine)
     retry_backoff_max=60 * 10,  # 10 minutes
 )
 def refund_tts_job(self: Task, job_id: str, quota_usage_event_id: int):
-    print("triggering refund")
-    print(job_id, quota_usage_event_id)
-    pass  # Implementation of refund logic goes here, e.g., interacting with payment gateway or updating user balance
+    with Session() as session:
+        try:
+            process_refund(session, job_id, quota_usage_event_id)
+        except Exception as e:
+            raise self.retry(exc=e)
 
 
 @app.task(
