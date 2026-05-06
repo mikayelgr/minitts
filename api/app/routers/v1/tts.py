@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from http import HTTPStatus
 from pydantic import BaseModel, Field, HttpUrl
 from app.dependencies import get_celery_app, get_pg_session, AsyncSession, Celery
@@ -23,7 +23,7 @@ class CreateTTSJobRequest(BaseModel):
         title="TTS text to synthesize",
         description="The input text to be synthesized into speech.",
         example="Hello, world!",
-        min_length=20,
+        min_length=2,
         max_length=1000,
     )
 
@@ -40,7 +40,7 @@ async def submit(
     session: Annotated[AsyncSession, Depends(get_pg_session)],
     celery: Annotated[Celery, Depends(get_celery_app)],
     user: Annotated[User, Depends(authenticate)],
-    payload: CreateTTSJobRequest,
+    payload: CreateTTSJobRequest = Body(..., description="The TTS inference request payload"),
 ):
     payload.text = payload.text.strip()
     required_tokens = len(payload.text.split(" "))
@@ -68,7 +68,7 @@ async def submit(
         user,
         Job(
             text=payload.text,
-            callback_url=payload.callback_url,
+            callback_url=str(payload.callback_url),
         ),
     )
 
@@ -83,8 +83,7 @@ async def submit(
 
     celery.send_task(
         JobDefinition.TTS_SYNTHESIZE,
-        job_id=str(job.id),
-        quota_usage_event_id=str(quota_usage_event.id),
+        (str(job.id), quota_usage_event.id),
     )
 
     return job
