@@ -5,7 +5,8 @@ FROM python:3.13-slim
 ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-COPY --from=ghcr.io/casey/just:1.50.0 /bin/just /bin/just
+# https://github.com/casey/just#docker
+COPY --from=ghcr.io/casey/just:1.50.0 /just /usr/local/bin/
 WORKDIR /soprano
 
 ENV HF_HUB_DISABLE_PROGRESS_BARS=1
