@@ -55,12 +55,10 @@ def test_generate_audio_success(mocker: MockerFixture, mock_deps: GenerateAudioD
     mocker.patch("celeryz.util.lock_job_for_processing", return_value=mock_job)
 
     # 2. SETUP MOCK HTTP REQUEST
-    # The real code does: pyreqwest_post(url).basic_auth(...).body_text(...).send()
-    # Each time a mock is called, it returns a new mock. So we configure the final mock in the chain:
-    mock_reqwest: MagicMock = mocker.patch("celeryz.util.pyreqwest_post")
-    mock_post_chain: MagicMock = mock_reqwest.return_value.basic_auth.return_value.body_text.return_value
-    mock_post_chain.send.return_value.status_code = 200  # Fake 200 OK
-    mock_post_chain.send.return_value.body_reader = b"audio data"  # Fake Audio Bytes
+    mock_stream = mocker.patch("celeryz.util.httpx.stream")
+    mock_context_manager = mock_stream.return_value.__enter__.return_value
+    mock_context_manager.status_code = 200
+    mock_context_manager.iter_bytes.return_value = [b"audio data"]
 
     # ACT
     result = generate_audio(mock_session, mock_deps)
@@ -71,7 +69,8 @@ def test_generate_audio_success(mocker: MockerFixture, mock_deps: GenerateAudioD
     assert result == mock_job
 
     # Check that the S3 mock recorded exactly one upload attempt
-    mock_deps.s3_client.put_object.assert_called_once()
+    mock_deps.s3_client.upload_fileobj.assert_called_once()
+    mock_deps.s3_client.get_object_attributes.return_value = {"ObjectSize": 1000}
 
     # Check that the DB mock recorded a commit
     mock_session.commit.assert_called()
@@ -83,8 +82,9 @@ def test_generate_audio_http_failure_retryable(mocker: MockerFixture, mock_deps:
     mocker.patch("celeryz.util.lock_job_for_processing", return_value=mock_job)
 
     # Fake an HTTP 500 Server Error
-    mock_reqwest: MagicMock = mocker.patch("celeryz.util.pyreqwest_post")
-    mock_reqwest.return_value.basic_auth.return_value.body_text.return_value.send.return_value.status_code = 500
+    mock_stream = mocker.patch("celeryz.util.httpx.stream")
+    mock_context_manager = mock_stream.return_value.__enter__.return_value
+    mock_context_manager.status_code = 500
 
     # Check that our RetryableError is raised (since attempt 0 < max 3)
     with pytest.raises(RetryableError, match="Non-200 response: 500"):
@@ -102,11 +102,77 @@ def test_generate_audio_http_failure_fatal(mocker: MockerFixture, mock_deps: Gen
     mocker.patch("celeryz.util.lock_job_for_processing", return_value=mock_job)
 
     # Fake an HTTP 500 Server Error
-    mock_reqwest: MagicMock = mocker.patch("celeryz.util.pyreqwest_post")
-    mock_reqwest.return_value.basic_auth.return_value.body_text.return_value.send.return_value.status_code = 500
+    mock_stream = mocker.patch("celeryz.util.httpx.stream")
+    mock_context_manager = mock_stream.return_value.__enter__.return_value
+    mock_context_manager.status_code = 500
 
     # Check that a FatalError is raised instead of a RetryableError
     with pytest.raises(FatalError, match="Max retries exhausted"):
         generate_audio(mock_session, mock_deps)
 
     assert mock_job.state == JobState.FAILURE
+
+import httpx
+
+def test_post_job_to_webhook_success(mocker: MockerFixture):
+    mock_session = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = "job-123"
+    mock_job.callback_url = "http://test-webhook.com"
+    mock_job.webhook_attempts = 0
+    mock_job.model_dump.return_value = {"id": "job-123"}
+    
+    mock_session.execute.return_value.scalar_one_or_none.return_value = mock_job
+    
+    mock_post = mocker.patch("celeryz.util.httpx.post")
+    mock_post.return_value.raise_for_status.return_value = None
+    
+    from celeryz.util import post_job_to_webhook
+    post_job_to_webhook(mock_session, "job-123")
+    
+    assert mock_job.webhook_attempts == 1
+    assert mock_job.webhook_delivered_at is not None
+    mock_post.assert_called_once_with("http://test-webhook.com", json={"id": "job-123"})
+    
+
+def test_post_job_to_webhook_http_error(mocker: MockerFixture):
+    mock_session = MagicMock()
+    mock_job = MagicMock()
+    mock_job.callback_url = "http://test-webhook.com"
+    mock_job.webhook_attempts = 0
+    mock_session.execute.return_value.scalar_one_or_none.return_value = mock_job
+    
+    mock_post = mocker.patch("celeryz.util.httpx.post")
+    mock_post.side_effect = httpx.RequestError("Network error")
+    
+    from celeryz.util import post_job_to_webhook
+    with pytest.raises(RetryableError):
+        post_job_to_webhook(mock_session, "job-123")
+        
+    assert mock_job.webhook_attempts == 1
+
+def test_process_refund_success(mocker: MockerFixture):
+    mock_session = MagicMock()
+    
+    mock_event = MagicMock()
+    mock_event.user_id = "user-123"
+    mock_event.amount = 100
+    mock_event.job_id = "job-123"
+    
+    mock_user = MagicMock()
+    mock_user.id = "user-123"
+    mock_user.quota_tokens_remaining = 500
+    
+    # First call: original_event, Second call: existing_refund, Third call: user
+    mock_session.execute.side_effect = [
+        MagicMock(scalar_one_or_none=lambda: mock_event),
+        MagicMock(scalar_one_or_none=lambda: None),
+        MagicMock(scalar_one=lambda: mock_user),
+    ]
+    
+    from celeryz.util import process_refund
+    process_refund(mock_session, "job-123", 1)
+    
+    assert mock_user.quota_tokens_remaining == 600
+    mock_session.add.assert_called_once()
+    mock_session.commit.assert_called_once()

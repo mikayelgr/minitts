@@ -69,7 +69,7 @@ class Job(SQLModel, table=True):
     # as the max length for callback URLs.
     callback_url: str = Field(nullable=False, max_length=2048)
     audio_url: str | None = Field(default=None, max_length=2048)
-    duration_seconds: float | None = Field(default=0.0, gt=0)
+    duration_seconds: float | None = Field(default=None, gt=0)
     error: str | None = Field(default=None, min_length=1)
 
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))

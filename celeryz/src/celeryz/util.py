@@ -128,12 +128,13 @@ def post_job_to_webhook(session: Session, job_id: str):
             logger.error(f"Job with id={job_id} not found for webhook posting")
             raise FatalError(f"Job with id={job_id} not found")
 
-        job.webhook_delivered_at = func.now()
         job.webhook_attempts += 1
         session.commit()
 
         response = httpx.post(str(job.callback_url), json=job.model_dump(mode="json"))
         response.raise_for_status()
+
+        job.webhook_delivered_at = func.now()
         session.commit()
     except httpx.RequestError as e:
         logger.error(f"HTTP request error when posting to webhook for job={job_id}: {e}")
