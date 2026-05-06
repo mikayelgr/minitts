@@ -52,3 +52,14 @@ app.conf.update(
     # https://docs.celeryq.dev/en/stable/userguide/configuration.html#task-create-missing-queues
     task_create_missing_queues=True,
 )
+
+# We need to import the tasks in order to make sure that they are properly
+# registered with the Celery app.
+from . import tasks
+from core.tasks import JobDefinition
+
+for job in JobDefinition:
+    if job.value not in app.tasks:
+        raise Exception(
+            f"Registered Celery task `{job.value}` not found in Celery app. This task will not be executed."
+        )
