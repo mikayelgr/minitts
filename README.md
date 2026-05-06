@@ -88,6 +88,8 @@ Currently implemented HTTP surface includes:
    - RedisInsight: <http://redisinsight.localhost:3000>, a Redis admin UI for inspecting cache/queue data and debugging queue state.
    - RabbitMQ: <http://rabbitmq.localhost:3000>, the broker UI for viewing message queues and worker traffic.
    - pgAdmin: <http://pgadmin.localhost:3000>, a database admin UI for browsing and managing Postgres.
+   - SeaweedFS Master UI: <http://seaweedfs-master-ui.localhost:3000>, for inspecting the cluster and topology.
+   - SeaweedFS Filer UI: <http://seaweedfs-filer-ui.localhost:3000>, for inspecting the stored audio files.
 
 2. Verify API health:
 
@@ -118,6 +120,7 @@ The current Compose stack starts these services:
 - `rabbitmq`: the RabbitMQ broker used for message delivery between producers and workers.
 - `postgres`: the Postgres database for persistent application data.
 - `pgadmin`: a Postgres UI for inspecting tables and managing the database.
+- `seaweedfs`: the SeaweedFS object storage system where generated audio files are persisted as WAVs.
 
 For local development against the Dockerized infrastructure from the host machine, you need to configure these environment variables in the `.env` files of `celeryz/`, `core/`, and `api/` packages accordingly:
 
@@ -129,7 +132,7 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
 # Additional variables only for `celeryz/` package
 TTS_INFERENCE_ENDPOINT=http://localhost:8081/v1/audio/speech/stream
 ## Assuming default SeaweedFS has been deployed from the provided Docker compose stack
-AWS_ACCESS_KEY_ID=access_key
+AWS_ACCESS_KEY_ID=admin
 AWS_SECRET_ACCESS_KEY=secret
 S3_BUCKET=minitts
 S3_ENDPOINT_URL=http://localhost:8333
