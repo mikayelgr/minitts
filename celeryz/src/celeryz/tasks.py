@@ -1,21 +1,17 @@
 from typing import cast
+
+from core.db.models import Job
 from .main import app, s3_client, settings
 from core.tasks import JobDefinition
 from celery import Task
 import logging
 from .main import pg_engine
 from core.db.engine import make_sync_sessionmaker
-from pydantic import validate_call, ConfigDict
-from .util import generate_audio, GenerateAudioDeps
-from .exc import RetryableError, FatalError
+from .util import generate_audio, GenerateAudioDeps, post_job_to_webhook
+from .exc import RetryableError
 
 logger = logging.getLogger(__name__)
 Session = make_sync_sessionmaker(pg_engine)
-# Required to allow the Celery 'Task' object (self) through validation, as well as to ensure
-# that the input data strictly adheres to the expected schema without allowing any extra fields
-# or types. This is crucial for maintaining data integrity and preventing potential issues during
-# task execution.
-validation_config = ConfigDict(extra="allow", strict=True, arbitrary_types_allowed=True)
 
 
 @app.task(
@@ -23,11 +19,33 @@ validation_config = ConfigDict(extra="allow", strict=True, arbitrary_types_allow
     bind=True,
     max_retries=5,
     retry_backoff=True,
+    ignore_result=True,
     retry_backoff_max=60 * 10,  # 10 minutes
 )
-@validate_call(config=validation_config)
-def refund_tts_job(self: Task, job_id: str, quota_usage_event_id: str):
+def refund_tts_job(self: Task, job_id: str, quota_usage_event_id: int):
+    print("triggering refund")
+    print(job_id, quota_usage_event_id)
     pass  # Implementation of refund logic goes here, e.g., interacting with payment gateway or updating user balance
+
+
+@app.task(
+    bind=True,
+    max_retries=5,
+    retry_backoff=True,
+    ignore_result=True,
+    retry_backoff_max=60 * 10,  # 10 minutes
+)
+def send_webhook(self: Task, job_id: str):
+    with Session() as session:
+        try:
+            post_job_to_webhook(session, job_id)
+        except RetryableError as e:
+            session.rollback()
+            raise self.retry(exc=e)
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Failed to send webhook for job={job_id}: {e}")
+            raise self.retry(exc=e, max_retries=self.max_retries + 1)
 
 
 @app.task(
@@ -35,13 +53,13 @@ def refund_tts_job(self: Task, job_id: str, quota_usage_event_id: str):
     bind=True,
     max_retries=5,
     retry_backoff=True,
+    ignore_result=True,
     retry_backoff_max=60 * 30,  # 30 minutes
 )
-@validate_call(config=validation_config)
-def synthesize_audio(self: Task, job_id: str, quota_usage_event_id: str):
+def synthesize_audio(self: Task, job_id: str, quota_usage_event_id: int):
     with Session() as session:
         try:
-            generate_audio(
+            job = generate_audio(
                 session,
                 GenerateAudioDeps(
                     job_id=job_id,
@@ -53,16 +71,18 @@ def synthesize_audio(self: Task, job_id: str, quota_usage_event_id: str):
                     tts_inference_endpoint=settings.tts_inference_endpoint,
                 ),
             )
+
+            cast(Task, send_webhook).delay(job_id=job.id)
         except RetryableError as e:
             raise self.retry(exc=e)
-        except FatalError as e:
+        except Exception as e:
             # Let Celery enqueue the background refund task on absolute failure
-            logger.error(f"Failed to synthesize audio for job={job_id}")
+            logger.error(f"Failed to synthesize audio for job={job_id}: exception={e}")
             try:
                 cast(Task, refund_tts_job).delay(
                     job_id=job_id,
                     quota_usage_event_id=quota_usage_event_id,
                 )
-            except Exception as refund_e:
-                logger.error(f"Failed to enqueue refund task for job={job_id}: {refund_e}")
-                raise self.retry(exc=refund_e, max_retries=self.max_retries + 1)
+            except Exception as e:
+                logger.error(f"Failed to enqueue refund task for job={job_id}: {e}")
+                raise self.retry(exc=e, max_retries=self.max_retries + 1)
