@@ -79,6 +79,7 @@ def test_generate_audio_success(mocker: MockerFixture, mock_deps: GenerateAudioD
 def test_generate_audio_http_failure_retryable(mocker: MockerFixture, mock_deps: GenerateAudioDeps) -> None:
     mock_session: Session = cast(Session, MagicMock())
     mock_job: MagicMock = MagicMock()
+    mock_job.user.username = "test_user"
     mocker.patch("celeryz.util.lock_job_for_processing", return_value=mock_job)
 
     # Fake an HTTP 500 Server Error
@@ -99,6 +100,7 @@ def test_generate_audio_http_failure_fatal(mocker: MockerFixture, mock_deps: Gen
 
     mock_session: Session = cast(Session, MagicMock())
     mock_job: MagicMock = MagicMock()
+    mock_job.user.username = "test_user"
     mocker.patch("celeryz.util.lock_job_for_processing", return_value=mock_job)
 
     # Fake an HTTP 500 Server Error
@@ -157,7 +159,7 @@ def test_process_refund_success(mocker: MockerFixture):
     mock_event = MagicMock()
     mock_event.user_id = "user-123"
     mock_event.amount = 100
-    mock_event.job_id = "job-123"
+    mock_event.job_id = "12345678-1234-5678-1234-567812345678"
     
     mock_user = MagicMock()
     mock_user.id = "user-123"
@@ -171,7 +173,7 @@ def test_process_refund_success(mocker: MockerFixture):
     ]
     
     from celeryz.util import process_refund
-    process_refund(mock_session, "job-123", 1)
+    process_refund(mock_session, "12345678-1234-5678-1234-567812345678", 1)
     
     assert mock_user.quota_tokens_remaining == 600
     mock_session.add.assert_called_once()
