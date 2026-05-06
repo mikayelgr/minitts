@@ -43,6 +43,21 @@ Currently implemented HTTP surface includes:
 - `GET /health` on the Soprano inference service
 - `POST /v1/audio/speech/stream` on the Soprano inference service for audio generation returned as 32kHz mono WAV streams.
 
+## Testing the End-to-End Workflow
+
+You can test the full suite directly using the Swagger UI assuming that you've deployed the Docker Compose file which runs the whole suite:
+
+1. Navigate to <http://api.localhost:3000/docs>.
+2. Authorize using Basic Auth with the following sample credentials:
+   - Username: `admin`
+   - Password: `4`
+
+> Note: No need for registration since for the sake of simplicity it's done automatically. You can test this out using other usernames as well coupled with `len(username)` as the password.
+
+1. Use a service like [Webhook.site](https://webhook.site) to generate a unique callback URL.
+2. Submit a TTS job via the `POST /v1/tts` endpoint using your Webhook.site URL as the `callback_url`.
+3. You can then monitor the job state via the `/v1/tts/{job_id}/status` and `/v1/tts/{job_id}/result` endpoints, and eventually see the completion payload delivered to Webhook.site.
+
 ## Quick Start
 
 1. Ensure Docker is installed and runs locally.

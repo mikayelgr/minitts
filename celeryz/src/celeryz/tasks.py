@@ -19,7 +19,6 @@ Session = make_sync_sessionmaker(pg_engine)
     bind=True,
     max_retries=5,
     retry_backoff=True,
-    ignore_result=True,
     retry_backoff_max=60 * 10,  # 10 minutes
 )
 def refund_tts_job(self: Task, job_id: str, quota_usage_event_id: int):
@@ -32,7 +31,6 @@ def refund_tts_job(self: Task, job_id: str, quota_usage_event_id: int):
     bind=True,
     max_retries=5,
     retry_backoff=True,
-    ignore_result=True,
     retry_backoff_max=60 * 10,  # 10 minutes
 )
 def send_webhook(self: Task, job_id: str):
@@ -53,7 +51,6 @@ def send_webhook(self: Task, job_id: str):
     bind=True,
     max_retries=5,
     retry_backoff=True,
-    ignore_result=True,
     retry_backoff_max=60 * 30,  # 30 minutes
 )
 def synthesize_audio(self: Task, job_id: str, quota_usage_event_id: int):

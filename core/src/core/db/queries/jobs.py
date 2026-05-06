@@ -44,3 +44,12 @@ def lock_job_for_processing(session: Session, job_id: UUID) -> Job | None:
     except Exception as e:
         logger.error(f"Unexpected error while locking job with id={job_id} for processing: {e}")
         return None
+
+
+async def get_job_unlocked(session: AsyncSession, job_id: UUID) -> Job | None:
+    stmt = select(Job).where(Job.id == job_id).with_for_update(nowait=True)
+    try:
+        job = await session.execute(stmt)
+        return job.scalar_one_or_none()
+    except DataError:
+        return None

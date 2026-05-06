@@ -8,8 +8,10 @@ from typing import Annotated
 import core.db.queries.jobs
 import core.db.queries.quotas
 from core.db.models import Job, UsageEventType
+from sqlalchemy.exc import OperationalError
 import logging
 from core.tasks import JobDefinition
+import uuid
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -24,7 +26,7 @@ class CreateTTSJobRequest(BaseModel):
         description="The input text to be synthesized into speech.",
         example="Hello, world!",
         min_length=2,
-        max_length=1000,
+        # max_length=1000,
     )
 
     callback_url: HttpUrl = Field(
@@ -84,6 +86,48 @@ async def submit(
     celery.send_task(
         JobDefinition.TTS_SYNTHESIZE,
         (str(job.id), quota_usage_event.id),
+        task_id=str(
+            # ensure that we can correlate the Celery task with the Job record in our database using the same UUID
+            job.id
+        ),
     )
 
     return job
+
+
+class JobStatusResponse(BaseModel):
+    status: str
+
+
+@router.get("/{job_id}/status", status_code=HTTPStatus.OK, response_model=JobStatusResponse)
+async def get_job_status_from_celery(
+    job_id: str,
+    celery: Annotated[Celery, Depends(get_celery_app)],
+):
+    from celery.result import AsyncResult
+
+    res = AsyncResult(job_id, app=celery)
+    return {"status": res.state}
+
+
+@router.get("/{job_id}/result", status_code=HTTPStatus.OK, response_model=Job)
+async def get_job_result(
+    job_id: str,
+    session: Annotated[AsyncSession, Depends(get_pg_session)],
+    user: Annotated[User, Depends(authenticate)],
+):
+    try:
+        uid = uuid.UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Job not found")
+
+    try:
+        job = await core.db.queries.jobs.get_job_unlocked(session, uid)
+        if not job or job.user_id != user.id:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Job not found")
+        return job
+    except OperationalError as e:
+        # 55P03 is the Postgres code for lock not available error (NOWAIT)
+        if hasattr(e.orig, "pgcode") and e.orig.pgcode == "55P03":
+            raise HTTPException(status_code=HTTPStatus.LOCKED, detail="Job is currently locked and being processed")
+        raise
