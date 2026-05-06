@@ -26,6 +26,7 @@ def mock_deps() -> GenerateAudioDeps:
         s3_client=mock_s3_client,
         s3_bucket="test-bucket",
         s3_endpoint=HttpUrl("http://test-s3.com"),
+        s3_public_endpoint=HttpUrl("http://public-s3.com"),
         tts_inference_endpoint="http://tts-api.com",
     )
 
