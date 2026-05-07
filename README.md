@@ -4,18 +4,18 @@
 
 MiniTTS is a production-minded foundation for an asynchronous Text-to-Speech service based on the [Soprano-1.1-80M](https://huggingface.co/ekwek/Soprano-1.1-80M) model. For inference, the service runs the Soprano model on CPU, served behind [Granian](https://github.com/emmett-framework/granian) as the Rust-based inference server.
 
-## What This Project Aims To Accomplish
+## What This Project Accomplishes
 
-The target system is an async TTS microservice where clients:
+MiniTTS is an async TTS microservice where clients:
 
 1. Submit text with a callback URL.
 2. Receive a job identifier immediately.
 3. Have synthesis processed in the background.
 4. Receive completion via webhook.
 
-In parallel, the platform should track quota usage (for example by character count or estimated audio seconds) so each request contributes to measurable, auditable usage.
+In parallel, the platform tracks quota usage (by character count) so each request contributes to measurable, auditable usage.
 
-This architecture is designed for reliability and scale: API traffic remains responsive while long-running synthesis jobs are handled by workers and queue infrastructure.
+This architecture handles reliability and scale: API traffic remains responsive while long-running synthesis jobs are handled by workers and queue infrastructure.
 
 ## Architecture
 
@@ -27,18 +27,18 @@ The API accepts a TTS job, persists it to Postgres, and dispatches a Celery task
 
 Producer (API) and consumer (worker) are intentionally decoupled through the broker, hence, the API can accept and queue work even when no worker is currently running, and worker restarts do not affect API availability.
 
-## How This Repository Intersects With The Task
+## Codebase Components
 
-Current codebase already provides the initial building blocks:
+The system is composed of the following building blocks:
 
-- FastAPI service scaffold in `api/app`.
+- FastAPI service in `api/app`.
 - Health endpoint at `GET /health` for all HTTP-exposed packages.
 - TTS submission endpoint at `POST /v1/tts`.
 - Environment-based configuration for Redis and Postgres.
 - Docker Compose stack for Caddy, Redis, RedisInsight, RabbitMQ, SeaweedFS, Postgres, pgAdmin, the MiniTTS API container, the Celery worker container, the Soprano inference engine + API, as well as a small container which runs the intial Alembic migrations automatically on start.
 - A developer-friendly landing page at `http://localhost:3000` that links to the main service subdomains.
 
-Currently implemented HTTP surface includes:
+The implemented HTTP surface includes:
 
 - `GET /health` on the API.
 - `POST /v1/tts` on the API for queued job submission.
