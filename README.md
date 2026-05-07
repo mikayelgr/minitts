@@ -162,3 +162,10 @@ S3_PUBLIC_ENDPOINT_URL=http://seaweedfs-s3.localhost:3000
 
 - Granian provides a low-latency, Rust-backed ASGI server for Python apps (benchmarks: <https://github.com/emmett-framework/granian/blob/master/benchmarks/vs.md>).
 - `uvloop` is used as the event loop to reduce request overhead (benchmarks: <https://github.com/MagicStack/uvloop#performance>).
+
+## Production Considerations
+
+While the current setup provides a comprehensive local development environment, a real-world production deployment would incorporate additional tooling for monitoring and observability:
+
+- **Grafana**: For continuous monitoring and observability across all services, providing dashboards to track their states, performance, and overall health.
+- **Sentry**: For centralized error tracking and monitoring, ensuring that any backend exceptions or failures are captured and that tickets are automatically opened where needed.
