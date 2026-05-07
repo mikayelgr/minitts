@@ -72,6 +72,9 @@ def synthesize_audio(self: Task, job_id: str, quota_usage_event_id: int):
                 ),
             )
 
+            if not job:
+                return
+
             cast(Task, send_webhook).delay(job_id=job.id)
         except RetryableError as e:
             raise self.retry(exc=e)
