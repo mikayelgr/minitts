@@ -21,6 +21,8 @@ This architecture is designed for reliability and scale: API traffic remains res
 
 The API accepts a TTS job, persists it to Postgres, and dispatches a Celery task through RabbitMQ. A worker consumes the task, calls the Soprano inference service, streams audio bytes back, updates the job row, stores the job result in Redis (Celery's result backend) and the inference result is stored in SeaweedFS as WAV audio file, and webhook post request is sent to the client's callback URL containing the audio URL of the generated file.
 
+> **Note:** The generated audio URLs are configured using a **"public-read"** ACL. This strategic design decision was made to avoid the complexities of temporary URL regeneration logic (such as pre-signed URLs) and the additional state-tracking implications that come with that approach.
+
 ![MiniTTS architecture](docs/assets/minitts_architecture_v6.svg)
 
 Producer (API) and consumer (worker) are intentionally decoupled through the broker, hence, the API can accept and queue work even when no worker is currently running, and worker restarts do not affect API availability.
