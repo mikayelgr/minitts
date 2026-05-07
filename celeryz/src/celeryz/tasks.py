@@ -1,6 +1,5 @@
 from typing import cast
 
-from core.db.models import Job
 from .main import app, s3_client, settings
 from core.tasks import JobDefinition
 from celery import Task
