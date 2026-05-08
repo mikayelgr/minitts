@@ -1,8 +1,8 @@
 from typing import cast
 
-from .main import app, s3_client, settings
+from .main import s3_client, settings
 from core.tasks import JobDefinition
-from celery import Task
+from celery import Task, shared_task
 import logging
 from .main import pg_engine
 from core.db.engine import make_sync_sessionmaker
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 Session = make_sync_sessionmaker(pg_engine)
 
 
-@app.task(
+@shared_task(
     name=JobDefinition.TTS_REFUND,
     bind=True,
     max_retries=5,
@@ -28,7 +28,7 @@ def refund_tts_job(self: Task, job_id: str, quota_usage_event_id: int):
             raise self.retry(exc=e)
 
 
-@app.task(
+@shared_task(
     bind=True,
     max_retries=5,
     retry_backoff=True,
@@ -47,7 +47,7 @@ def send_webhook(self: Task, job_id: str):
             raise self.retry(exc=e, max_retries=self.max_retries + 1)
 
 
-@app.task(
+@shared_task(
     name=JobDefinition.TTS_SYNTHESIZE,
     bind=True,
     max_retries=5,

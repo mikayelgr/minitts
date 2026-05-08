@@ -4,6 +4,8 @@ from pydantic import RedisDsn, AmqpDsn, HttpUrl, PostgresDsn, Field
 import logging
 from .s3 import create_s3_client
 from .pg import create_pg_engine
+from core.tasks import JobDefinition
+from celery.loaders.base import BaseLoader
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,7 +44,9 @@ app = Celery(
     "celeryz",
     broker=str(settings.celery_broker_url),
     backend=str(settings.celery_result_backend_url),
+    include=["celeryz.tasks"],
 )
+
 
 app.conf.update(
     task_compression="gzip",
@@ -54,10 +58,9 @@ app.conf.update(
     task_create_missing_queues=True,
 )
 
-# We need to import the tasks in order to make sure that they are properly
-# registered with the Celery app.
-from . import tasks
-from core.tasks import JobDefinition
+# Force import of modules from `include=[...]` before validating registrations.
+BaseLoader(app).import_default_modules()
+
 
 for job in JobDefinition:
     if job.value not in app.tasks:
