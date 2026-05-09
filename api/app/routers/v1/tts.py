@@ -57,7 +57,14 @@ class CreateTTSJobRequest(BaseModel):
         except ValueError:
             return value
 
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
             raise ValueError("callback_url must not point to an internal/reserved IP range")
         return value
 
@@ -157,9 +164,9 @@ async def get_job_status_from_celery(
     # task IDs as well as genuinely pending tasks, so PENDING means "fall back to the DB state".
     res = AsyncResult(job_id, app=celery)
     if res.state != "PENDING":
-        return {"status": res.state}
+        return {"status": str(res.state).lower()}
 
-    return {"status": job.state.value}
+    return {"status": job.state.value.lower()}
 
 
 @router.get("/{job_id}/result", status_code=HTTPStatus.OK, response_model=Job)
