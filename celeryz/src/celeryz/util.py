@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from typing import Any, cast
 import uuid
 from types_boto3_s3 import S3Client
-from pydantic import BaseModel, StrictStr, StrictInt, HttpUrl, ConfigDict
+from pydantic import BaseModel, StrictStr, HttpUrl, ConfigDict
 from .exc import RetryableError, FatalError
 import httpx
 from httpx import BasicAuth
@@ -39,8 +39,6 @@ class HttpxStreamWrapper:
 
 class GenerateAudioDeps(BaseModel):
     job_id: StrictStr
-    retries: StrictInt
-    max_retries: StrictInt
     s3_client: Any  # We use Any here because the S3Client type from types_boto3_s3 is not recognized as a valid type by Pydantic, even though it is the correct type for our S3 client instance.
     s3_bucket: StrictStr
     s3_public_endpoint: HttpUrl
@@ -95,17 +93,15 @@ def generate_and_store_audio(session: Session, deps: GenerateAudioDeps):
             auth=BasicAuth(username=job.user.username, password=str(len(job.user.username))),
         ) as response:
             if response.status_code != 200:
+                # Any non-200 from the inference endpoint is treated as transient and surfaced as
+                # RetryableError. The synthesize task retries on that exception with no upper bound
+                # (see celeryz.tasks docstring), so this branch never marks the job FAILURE on its
+                # own — only an unexpected exception in the calling task does, via the refund path.
                 logger.warning(f"Received non-200 response for job={job.id} status={response.status_code}")
-                if deps.retries < deps.max_retries:
-                    job.state = JobState.PENDING
-                    job.error = f"Received non-200 response: {response.status_code}. Retrying..."
-                    session.commit()
-                    raise RetryableError(f"Non-200 response: {response.status_code}")
-                else:
-                    job.state = JobState.FAILURE
-                    job.error = f"Failed to synthesize audio after {deps.max_retries} attempts. Last status code: {response.status_code}"
-                    session.commit()
-                    raise FatalError("Max retries exhausted")
+                job.state = JobState.PENDING
+                job.error = f"Received non-200 response: {response.status_code}. Retrying..."
+                session.commit()
+                raise RetryableError(f"Non-200 response: {response.status_code}")
 
             try:
                 s3_client.upload_fileobj(

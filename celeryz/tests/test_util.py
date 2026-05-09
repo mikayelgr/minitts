@@ -7,7 +7,7 @@ from pytest_mock import MockerFixture
 from sqlalchemy.orm import Session
 from types_boto3_s3 import S3Client
 
-from celeryz.util import FatalError, GenerateAudioDeps, RetryableError, generate_and_store_audio
+from celeryz.util import GenerateAudioDeps, RetryableError, generate_and_store_audio
 from core.db.models import JobState
 from core.db.queries.jobs import JobAccessResult
 
@@ -22,8 +22,6 @@ def mock_deps() -> GenerateAudioDeps:
     mock_s3_client: S3Client = cast(S3Client, MagicMock())
     return GenerateAudioDeps(
         job_id="12345678-1234-5678-1234-567812345678",
-        retries=0,  # Simulates that this is the first attempt
-        max_retries=3,  # Will fail permanently after 3 tries
         s3_client=mock_s3_client,
         s3_bucket="test-bucket",
         s3_public_endpoint=HttpUrl("http://public-s3.com"),
@@ -90,37 +88,18 @@ def test_generate_and_store_audio_http_failure_retryable(mocker: MockerFixture, 
     mock_job.user.username = "test_user"
     mocker.patch("celeryz.util.lock_job_for_processing", return_value=JobAccessResult(job=mock_job, is_locked=False))
 
-    # Fake an HTTP 500 Server Error
+    # Fake an HTTP 500 Server Error. Under the indefinite-retry policy every non-200 from the
+    # inference endpoint surfaces as RetryableError and the row is left in PENDING for the next
+    # attempt; there is no in-util "max retries exhausted → FAILURE" branch anymore.
     mock_stream = mocker.patch("celeryz.util.httpx.stream")
     mock_context_manager = mock_stream.return_value.__enter__.return_value
     mock_context_manager.status_code = 500
 
-    # Check that our RetryableError is raised (since attempt 0 < max 3)
     with pytest.raises(RetryableError, match="Non-200 response: 500"):
         generate_and_store_audio(mock_session, mock_deps)
 
     assert mock_job.state == JobState.PENDING
 
-
-def test_generate_and_store_audio_http_failure_fatal(mocker: MockerFixture, mock_deps: GenerateAudioDeps) -> None:
-    # Simulating the scenario where we have exhausted all retries
-    mock_deps.retries = 3
-
-    mock_session: Session = cast(Session, MagicMock())
-    mock_job: MagicMock = MagicMock()
-    mock_job.user.username = "test_user"
-    mocker.patch("celeryz.util.lock_job_for_processing", return_value=JobAccessResult(job=mock_job, is_locked=False))
-
-    # Fake an HTTP 500 Server Error
-    mock_stream = mocker.patch("celeryz.util.httpx.stream")
-    mock_context_manager = mock_stream.return_value.__enter__.return_value
-    mock_context_manager.status_code = 500
-
-    # Check that a FatalError is raised instead of a RetryableError
-    with pytest.raises(FatalError, match="Max retries exhausted"):
-        generate_and_store_audio(mock_session, mock_deps)
-
-    assert mock_job.state == JobState.FAILURE
 
 import httpx
 
