@@ -50,6 +50,12 @@ app = Celery(
 
 app.conf.update(
     task_compression="gzip",
+    # Pin serialization to JSON explicitly. JSON cannot encode UUIDs, datetimes, etc., so
+    # callers must pre-stringify those values. Being explicit here surfaces any drift in
+    # the producer side rather than relying on Celery's defaults.
+    task_serializer="json",
+    result_serializer="json",
+    accept_content=["json"],
     # https://docs.celeryq.dev/en/stable/userguide/configuration.html#task-acks-late
     task_acks_late=True,
     # https://docs.celeryq.dev/en/stable/userguide/configuration.html#task-reject-on-worker-lost
