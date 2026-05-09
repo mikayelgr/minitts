@@ -129,7 +129,9 @@ def generate_and_store_audio(session: Session, deps: GenerateAudioDeps):
                 try:
                     s3_client.delete_object(Bucket=deps.s3_bucket, Key=file_key)
                 except Exception as cleanup_error:
-                    logger.error(f"Error occurred while cleaning up partial S3 upload for job={job.id}: {cleanup_error}")
+                    logger.error(
+                        f"Error occurred while cleaning up partial S3 upload for job={job.id}: {cleanup_error}"
+                    )
 
                 raise RetryableError(str(e))
     except httpx.RequestError as e:
@@ -188,9 +190,7 @@ def process_refund(session: Session, job_id: str, quota_usage_event_id: int):
         # refund tasks for the same job serialize on it. Otherwise both can pass the
         # `existing_refund is None` check and both insert a refund row, double-crediting the user.
         original_event = session.execute(
-            select(QuotaUsageEvent)
-            .with_for_update()
-            .where(QuotaUsageEvent.id == quota_usage_event_id)
+            select(QuotaUsageEvent).with_for_update().where(QuotaUsageEvent.id == quota_usage_event_id)
         ).scalar_one_or_none()
 
         if not original_event:
