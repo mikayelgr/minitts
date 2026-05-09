@@ -1,7 +1,7 @@
 from core.db.models import Job, JobState, User, QuotaUsageEvent, UsageEventType
 from core.db.queries.jobs import lock_job_for_processing
 import time
-from sqlalchemy import func, select
+from sqlalchemy import select
 from botocore.exceptions import ClientError
 import logging
 from sqlalchemy.orm import Session
@@ -43,7 +43,6 @@ class GenerateAudioDeps(BaseModel):
     max_retries: StrictInt
     s3_client: Any  # We use Any here because the S3Client type from types_boto3_s3 is not recognized as a valid type by Pydantic, even though it is the correct type for our S3 client instance.
     s3_bucket: StrictStr
-    s3_endpoint: HttpUrl
     s3_public_endpoint: HttpUrl
     tts_inference_endpoint: HttpUrl
 
@@ -51,68 +50,101 @@ class GenerateAudioDeps(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
-def generate_audio(session: Session, deps: GenerateAudioDeps):
-    job = lock_job_for_processing(session, job_id=deps.job_id)
-    if not job:
-        return None  # Already being processed
+def generate_and_store_audio(session: Session, deps: GenerateAudioDeps):
+    job_uuid = uuid.UUID(deps.job_id)
+    result = lock_job_for_processing(session, job_uuid)
+    if result.is_locked:
+        # Another transaction holds the row lock (likely a transient API read or a concurrent
+        # worker delivery from a redelivered task). Retry instead of silently succeeding —
+        # otherwise the synthesis would be skipped and the job would sit in PENDING forever.
+        raise RetryableError(f"Job {deps.job_id} is locked by another transaction")
+    if not result.job:
+        # `lock_job_for_processing` filters by state in (CREATED, PENDING), so a None result here
+        # could mean either: (a) the row genuinely doesn't exist — likely an orphaned task whose
+        # submit-side transaction rolled back after Celery accepted the enqueue, or (b) the row
+        # exists but is in a terminal/in-flight state already (sibling delivery beat us to it,
+        # job was cancelled, etc.). Disambiguate so we can log usefully — silent no-ops on case
+        # (a) hide a real bug if the rollback path ever starts firing.
+        exists = session.execute(select(Job.id).where(Job.id == job_uuid)).scalar_one_or_none()
+        if exists is None:
+            logger.warning(
+                f"Synthesize task received for job_id={deps.job_id} but no row exists in the "
+                "database — likely an orphaned enqueue from a rolled-back submit transaction."
+            )
+        else:
+            logger.info(
+                f"Synthesize task for job_id={deps.job_id} found the row in a non-eligible state; "
+                "skipping (already processed, cancelled, or claimed by a sibling delivery)."
+            )
+        return None
+
+    job = result.job
 
     job.state = JobState.EXECUTING
     job.started_at = datetime.now(timezone.utc)
     session.commit()
 
-    with httpx.stream(
-        "POST",
-        str(deps.tts_inference_endpoint),
-        data=job.text,
-        auth=BasicAuth(username=job.user.username, password=str(len(job.user.username))),
-    ) as response:
-        if response.status_code != 200:
-            logger.warning(f"Received non-200 response for job={job.id} status={response.status_code}")
-            if deps.retries < deps.max_retries:
-                job.state = JobState.PENDING
-                job.error = f"Received non-200 response: {response.status_code}. Retrying..."
-                session.commit()
-                raise RetryableError(f"Non-200 response: {response.status_code}")
-            else:
-                job.state = JobState.FAILURE
-                job.error = f"Failed to synthesize audio after {deps.max_retries} attempts. Last status code: {response.status_code}"
-                session.commit()
-                raise FatalError("Max retries exhausted")
+    file_key = f"{job.id}__{time.monotonic_ns()}.wav"
+    s3_client = cast(S3Client, deps.s3_client)
 
-        file_key = f"{job.id}__{time.monotonic_ns()}.wav"
-        s3_client = cast(S3Client, deps.s3_client)
+    try:
+        with httpx.stream(
+            "POST",
+            str(deps.tts_inference_endpoint),
+            data=job.text,
+            auth=BasicAuth(username=job.user.username, password=str(len(job.user.username))),
+        ) as response:
+            if response.status_code != 200:
+                logger.warning(f"Received non-200 response for job={job.id} status={response.status_code}")
+                if deps.retries < deps.max_retries:
+                    job.state = JobState.PENDING
+                    job.error = f"Received non-200 response: {response.status_code}. Retrying..."
+                    session.commit()
+                    raise RetryableError(f"Non-200 response: {response.status_code}")
+                else:
+                    job.state = JobState.FAILURE
+                    job.error = f"Failed to synthesize audio after {deps.max_retries} attempts. Last status code: {response.status_code}"
+                    session.commit()
+                    raise FatalError("Max retries exhausted")
 
-        try:
-            s3_client.upload_fileobj(
-                Bucket=deps.s3_bucket,
-                Key=file_key,
-                # Stream the response in chunks of size 16KB to avoid loading the entire audio file into memory at once. This is
-                # important for handling large audio files without running into memory issues. We place the stress more on the
-                # network and disk I/O rather than memory, which is more efficient for large files.
-                Fileobj=HttpxStreamWrapper(response.iter_bytes(chunk_size=16 * 1024)),
-                # Ensure that the object is publicly readable with its URL (this is necessary for the callback to access the file without
-                # needing AWS credentials). We set the ACL to "public-read" which allows anyone to read the object, but does not allow public
-                # write access.
-                ExtraArgs={"ContentType": "audio/wav"},
-            )
-
-            r = s3_client.get_object_attributes(Bucket=deps.s3_bucket, Key=file_key, ObjectAttributes=["ObjectSize"])
-            # Sample rate of Soprano is 32kHz. We calculate the duration in seconds using the formula
-            # file_size / (sample_rate * bytes_per_sample * channels)
-            job.duration_seconds = r["ObjectSize"] / (32000 * 2 * 1)
-            s3_client.put_object_acl(Bucket=deps.s3_bucket, Key=file_key, ACL="public-read")
-        except ClientError as e:
-            logger.error(f"Error occurred while uploading to S3: {e}")
-            job.state = JobState.PENDING
-            job.error = f"Failed to upload audio to S3: {str(e)}"
-            session.commit()
             try:
-                s3_client.delete_object(Bucket=deps.s3_bucket, Key=file_key)
-            except Exception as cleanup_error:
-                logger.error(f"Error occurred while cleaning up partial S3 upload for job={job.id}: {cleanup_error}")
-                pass  # If cleanup fails, we log it but do not raise an exception since the main error is the upload failure
+                s3_client.upload_fileobj(
+                    Bucket=deps.s3_bucket,
+                    Key=file_key,
+                    # Stream the response in chunks of size 1MB to avoid loading the entire audio file into memory at once. This is
+                    # important for handling large audio files without running into memory issues. We place the stress more on the
+                    # network and disk I/O rather than memory, which is more efficient for large files.
+                    Fileobj=HttpxStreamWrapper(response.iter_bytes(chunk_size=1024**2)),
+                    ExtraArgs={"ContentType": "audio/wav"},
+                )
 
-            raise RetryableError(str(e))
+                r = s3_client.get_object_attributes(
+                    Bucket=deps.s3_bucket, Key=file_key, ObjectAttributes=["ObjectSize"]
+                )
+                # Sample rate of Soprano is 32kHz. We calculate the duration in seconds using the formula
+                # file_size / (sample_rate * bytes_per_sample * channels)
+                job.duration_seconds = r["ObjectSize"] / (32000 * 2 * 1)
+                s3_client.put_object_acl(Bucket=deps.s3_bucket, Key=file_key, ACL="public-read")
+            except ClientError as e:
+                logger.error(f"Error occurred while uploading to S3: {e}")
+                job.state = JobState.PENDING
+                job.error = f"Failed to upload audio to S3: {str(e)}"
+                session.commit()
+                try:
+                    s3_client.delete_object(Bucket=deps.s3_bucket, Key=file_key)
+                except Exception as cleanup_error:
+                    logger.error(f"Error occurred while cleaning up partial S3 upload for job={job.id}: {cleanup_error}")
+
+                raise RetryableError(str(e))
+    except httpx.RequestError as e:
+        # Connection-layer failures (DNS, connect, TLS, read timeout while streaming). These never
+        # reach the status-code branch above, so without this handler they'd bubble out of the task
+        # as an unclassified Exception and trigger an immediate refund without any retry.
+        logger.warning(f"Connection error talking to TTS inference endpoint for job={job.id}: {e}")
+        job.state = JobState.PENDING
+        job.error = f"Connection error: {e}"
+        session.commit()
+        raise RetryableError(f"Connection error: {e}")
 
     job.audio_url = url_normalize(f"{deps.s3_public_endpoint}/{deps.s3_bucket}/{file_key}")
     job.state = JobState.SUCCESS
@@ -130,26 +162,39 @@ def post_job_to_webhook(session: Session, job_id: str):
             logger.error(f"Job with id={job_id} not found for webhook posting")
             raise FatalError(f"Job with id={job_id} not found")
 
+        # Persist the attempt time alongside the attempt counter so webhook_delivered_at reflects
+        # the most recent attempt — including failed ones. Otherwise the field would stay NULL
+        # until the first successful delivery, which loses information about prior tries.
         job.webhook_attempts += 1
+        job.webhook_delivered_at = datetime.now(timezone.utc)
         session.commit()
 
         response = httpx.post(str(job.callback_url), json=job.model_dump(mode="json"))
         response.raise_for_status()
-
-        job.webhook_delivered_at = datetime.now(timezone.utc)
-        session.commit()
     except httpx.RequestError as e:
         logger.error(f"HTTP request error when posting to webhook for job={job_id}: {e}")
         raise RetryableError(f"HTTP request error: {e}")
     except httpx.HTTPStatusError as e:
-        logger.error(f"HTTP status error when posting to webhook for job={job_id}: {e}")
+        status = e.response.status_code
+        # 4xx (other than 408 Request Timeout and 429 Too Many Requests) are client errors that
+        # won't be fixed by retrying — bad URL, auth rejection, gone, etc. Treat them as fatal so
+        # we don't burn the retry budget on them. 5xx and the two retryable 4xx codes still retry.
+        if 400 <= status < 500 and status not in (408, 429):
+            logger.error(f"Fatal HTTP status {status} from webhook for job={job_id}: {e}")
+            raise FatalError(f"Webhook returned non-retryable status: {status}")
+        logger.error(f"Retryable HTTP status {status} from webhook for job={job_id}: {e}")
         raise RetryableError(f"HTTP status error: {e}")
 
 
 def process_refund(session: Session, job_id: str, quota_usage_event_id: int):
     try:
+        # Lock the original USAGE event for the duration of the transaction so two concurrent
+        # refund tasks for the same job serialize on it. Otherwise both can pass the
+        # `existing_refund is None` check and both insert a refund row, double-crediting the user.
         original_event = session.execute(
-            select(QuotaUsageEvent).where(QuotaUsageEvent.id == quota_usage_event_id)
+            select(QuotaUsageEvent)
+            .with_for_update()
+            .where(QuotaUsageEvent.id == quota_usage_event_id)
         ).scalar_one_or_none()
 
         if not original_event:

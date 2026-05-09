@@ -6,7 +6,7 @@ from celery import Task, shared_task
 import logging
 from .main import pg_engine
 from core.db.engine import make_sync_sessionmaker
-from .util import generate_audio, GenerateAudioDeps, post_job_to_webhook, process_refund
+from .util import generate_and_store_audio, GenerateAudioDeps, post_job_to_webhook, process_refund
 from .exc import RetryableError
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ def send_webhook(self: Task, job_id: str):
 def synthesize_audio(self: Task, job_id: str, quota_usage_event_id: int):
     with Session() as session:
         try:
-            job = generate_audio(
+            job = generate_and_store_audio(
                 session,
                 GenerateAudioDeps(
                     job_id=job_id,
@@ -65,7 +65,6 @@ def synthesize_audio(self: Task, job_id: str, quota_usage_event_id: int):
                     max_retries=self.max_retries,
                     s3_client=s3_client,
                     s3_bucket=settings.s3_bucket,
-                    s3_endpoint=settings.s3_endpoint_url,
                     s3_public_endpoint=settings.s3_public_endpoint_url,
                     tts_inference_endpoint=settings.tts_inference_endpoint,
                 ),

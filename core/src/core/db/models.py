@@ -70,7 +70,7 @@ class Job(SQLModel, table=True):
     callback_url: str = Field(nullable=False, max_length=2048)
     audio_url: str | None = Field(default=None, max_length=2048)
     duration_seconds: float | None = Field(default=None, gt=0)
-    error: str | None = Field(default=None, min_length=1)
+    error: str | None = Field(default=None)
 
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
     started_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
@@ -78,7 +78,7 @@ class Job(SQLModel, table=True):
     webhook_delivered_at: datetime | None = Field(
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
     )
-    webhook_attempts: int = Field(default=0, nullable=False, gt=0)
+    webhook_attempts: int = Field(default=0, nullable=False, ge=0)
 
     # Relationships
     user: "User" = Relationship(back_populates="jobs")

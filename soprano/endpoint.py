@@ -55,8 +55,11 @@ async def lifespan(app: FastAPI):
     )
 
     logger.info("Model loaded. Warming up the model with sample data inferences...")
-    # Read the warmup data files into memory once
-    warmup_data = [open(f"./warmup_data/{i+1}.txt", "r").read() for i in range(3)]
+    # Read the warmup data files into memory once.
+    warmup_data: list[str] = []
+    for i in range(3):
+        with open(f"./warmup_data/{i+1}.txt", "r") as f:
+            warmup_data.append(f.read())
     for _ in range(2):
         warmup_tasks = [asyncio.to_thread(app.state.model.infer, data) for data in warmup_data]
         await asyncio.gather(*warmup_tasks)

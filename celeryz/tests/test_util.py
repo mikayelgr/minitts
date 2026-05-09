@@ -7,8 +7,9 @@ from pytest_mock import MockerFixture
 from sqlalchemy.orm import Session
 from types_boto3_s3 import S3Client
 
-from celeryz.util import FatalError, GenerateAudioDeps, RetryableError, generate_audio
+from celeryz.util import FatalError, GenerateAudioDeps, RetryableError, generate_and_store_audio
 from core.db.models import JobState
+from core.db.queries.jobs import JobAccessResult
 
 
 # We define test dependencies once so we don't repeat them.
@@ -20,40 +21,46 @@ def mock_deps() -> GenerateAudioDeps:
     """
     mock_s3_client: S3Client = cast(S3Client, MagicMock())
     return GenerateAudioDeps(
-        job_id="job-123",
+        job_id="12345678-1234-5678-1234-567812345678",
         retries=0,  # Simulates that this is the first attempt
         max_retries=3,  # Will fail permanently after 3 tries
         s3_client=mock_s3_client,
         s3_bucket="test-bucket",
-        s3_endpoint=HttpUrl("http://test-s3.com"),
         s3_public_endpoint=HttpUrl("http://public-s3.com"),
         tts_inference_endpoint="http://tts-api.com",
     )
 
 
-def test_generate_audio_already_processed(mocker: MockerFixture, mock_deps: GenerateAudioDeps) -> None:
+def test_generate_and_store_audio_already_processed(mocker: MockerFixture, mock_deps: GenerateAudioDeps) -> None:
     mock_session: Session = cast(Session, MagicMock())
 
-    # 1. MOCKING RETURNS
-    # Replace 'lock_job_for_processing' with a fake function that instantly returns None.
-    # This simulates the situation where the database row is locked by another worker.
-    mocker.patch("celeryz.util.lock_job_for_processing", return_value=None)
+    # JobAccessResult with no job and is_locked=False means the row no longer matches the
+    # CREATED/PENDING filter — i.e. it has already been processed. The task should silently no-op.
+    mocker.patch("celeryz.util.lock_job_for_processing", return_value=JobAccessResult(job=None, is_locked=False))
 
-    # 2. ACT
-    result = generate_audio(mock_session, mock_deps)
-
-    # 3. ASSERT
+    result = generate_and_store_audio(mock_session, mock_deps)
     assert result is None
 
 
-def test_generate_audio_success(mocker: MockerFixture, mock_deps: GenerateAudioDeps) -> None:
+def test_generate_and_store_audio_locked_retries(mocker: MockerFixture, mock_deps: GenerateAudioDeps) -> None:
+    mock_session: Session = cast(Session, MagicMock())
+
+    # is_locked=True means another transaction holds the row — the worker must surface this as a
+    # retryable error rather than silently succeeding (which would lose the synthesis).
+    mocker.patch("celeryz.util.lock_job_for_processing", return_value=JobAccessResult(job=None, is_locked=True))
+
+    with pytest.raises(RetryableError, match="locked by another transaction"):
+        generate_and_store_audio(mock_session, mock_deps)
+
+
+def test_generate_and_store_audio_success(mocker: MockerFixture, mock_deps: GenerateAudioDeps) -> None:
     mock_session: Session = cast(Session, MagicMock())
 
     # 1. SETUP MOCK JOB
     mock_job: MagicMock = MagicMock()
     mock_job.id = "job-123"
     mock_job.user.username = "test_user"
-    mocker.patch("celeryz.util.lock_job_for_processing", return_value=mock_job)
+    mocker.patch("celeryz.util.lock_job_for_processing", return_value=JobAccessResult(job=mock_job, is_locked=False))
 
     # 2. SETUP MOCK HTTP REQUEST
     mock_stream = mocker.patch("celeryz.util.httpx.stream")
@@ -62,7 +69,7 @@ def test_generate_audio_success(mocker: MockerFixture, mock_deps: GenerateAudioD
     mock_context_manager.iter_bytes.return_value = [b"audio data"]
 
     # ACT
-    result = generate_audio(mock_session, mock_deps)
+    result = generate_and_store_audio(mock_session, mock_deps)
 
     # ASSERT
     # Check that our code successfully modified the state to SUCCESS
@@ -77,11 +84,11 @@ def test_generate_audio_success(mocker: MockerFixture, mock_deps: GenerateAudioD
     mock_session.commit.assert_called()
 
 
-def test_generate_audio_http_failure_retryable(mocker: MockerFixture, mock_deps: GenerateAudioDeps) -> None:
+def test_generate_and_store_audio_http_failure_retryable(mocker: MockerFixture, mock_deps: GenerateAudioDeps) -> None:
     mock_session: Session = cast(Session, MagicMock())
     mock_job: MagicMock = MagicMock()
     mock_job.user.username = "test_user"
-    mocker.patch("celeryz.util.lock_job_for_processing", return_value=mock_job)
+    mocker.patch("celeryz.util.lock_job_for_processing", return_value=JobAccessResult(job=mock_job, is_locked=False))
 
     # Fake an HTTP 500 Server Error
     mock_stream = mocker.patch("celeryz.util.httpx.stream")
@@ -90,19 +97,19 @@ def test_generate_audio_http_failure_retryable(mocker: MockerFixture, mock_deps:
 
     # Check that our RetryableError is raised (since attempt 0 < max 3)
     with pytest.raises(RetryableError, match="Non-200 response: 500"):
-        generate_audio(mock_session, mock_deps)
+        generate_and_store_audio(mock_session, mock_deps)
 
     assert mock_job.state == JobState.PENDING
 
 
-def test_generate_audio_http_failure_fatal(mocker: MockerFixture, mock_deps: GenerateAudioDeps) -> None:
+def test_generate_and_store_audio_http_failure_fatal(mocker: MockerFixture, mock_deps: GenerateAudioDeps) -> None:
     # Simulating the scenario where we have exhausted all retries
     mock_deps.retries = 3
 
     mock_session: Session = cast(Session, MagicMock())
     mock_job: MagicMock = MagicMock()
     mock_job.user.username = "test_user"
-    mocker.patch("celeryz.util.lock_job_for_processing", return_value=mock_job)
+    mocker.patch("celeryz.util.lock_job_for_processing", return_value=JobAccessResult(job=mock_job, is_locked=False))
 
     # Fake an HTTP 500 Server Error
     mock_stream = mocker.patch("celeryz.util.httpx.stream")
@@ -111,7 +118,7 @@ def test_generate_audio_http_failure_fatal(mocker: MockerFixture, mock_deps: Gen
 
     # Check that a FatalError is raised instead of a RetryableError
     with pytest.raises(FatalError, match="Max retries exhausted"):
-        generate_audio(mock_session, mock_deps)
+        generate_and_store_audio(mock_session, mock_deps)
 
     assert mock_job.state == JobState.FAILURE
 

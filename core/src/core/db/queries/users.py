@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from core.db.models import User
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -19,3 +21,11 @@ async def get_or_create_user(session: AsyncSession, username: str) -> User:
         user = result.scalar_one()
 
     return user
+
+
+async def lock_user(session: AsyncSession, user_id: UUID) -> User | None:
+    """Fetch the user row with FOR UPDATE so concurrent quota mutations are serialized.
+    The lock is released when the surrounding transaction commits or rolls back."""
+    stmt = select(User).where(User.id == user_id).with_for_update().limit(1)
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
