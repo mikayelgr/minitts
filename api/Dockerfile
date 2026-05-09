@@ -4,12 +4,8 @@ ENV PYTHONUNBUFFERED=1
 # installing uv tooling which is necessary for this project
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# these are the environment variables that will be used by the application, they will be passed in at runtime
-# these are strictly necessary for the application to run, it's the user's responsibility to provide them when
-# running the container.
-ARG CELERY_BROKER_URL
-ARG CELERY_RESULT_BACKEND_URL
-ARG DATABASE_URL
+# Required runtime environment variables (provided by docker-compose / the deployer):
+#   CELERY_BROKER_URL, CELERY_RESULT_BACKEND_URL, DATABASE_URL
 ENV UV_PROJECT_ENVIRONMENT=/usr/local
 
 WORKDIR /container

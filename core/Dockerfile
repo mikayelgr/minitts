@@ -3,7 +3,8 @@ ENV PYTHONUNBUFFERED=1
 # installing uv tooling which is necessary for this project
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-ARG DATABASE_URL
+# Required runtime environment variable (provided by docker-compose / the deployer):
+#   DATABASE_URL
 ENV UV_PROJECT_ENVIRONMENT=/usr/local
 
 WORKDIR /container

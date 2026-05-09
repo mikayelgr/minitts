@@ -37,6 +37,17 @@ class CreateTTSJobRequest(BaseModel):
         example="https://myapp.com/webhook",
     )
 
+    @field_validator("text")
+    @classmethod
+    def _strip_text(cls, value: str) -> str:
+        # Trim before the length check applies. Without this, a payload like "  " satisfies
+        # `min_length=2` and is then stripped inside the handler — debiting quota for an
+        # effectively empty job.
+        stripped = value.strip()
+        if len(stripped) < 2:
+            raise ValueError("text must be at least 2 non-whitespace characters")
+        return stripped
+
     @field_validator("callback_url")
     @classmethod
     def _reject_internal_callback_targets(cls, value: HttpUrl) -> HttpUrl:
@@ -76,7 +87,6 @@ async def submit(
     user: Annotated[User, Depends(authenticate)],
     payload: CreateTTSJobRequest = Body(..., description="The TTS inference request payload"),
 ):
-    payload.text = payload.text.strip()
     required_tokens = len(payload.text.split(" "))
 
     # Re-fetch the user row with FOR UPDATE so the quota check + deduction is serialized against

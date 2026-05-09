@@ -13,7 +13,7 @@ MiniTTS is an async TTS microservice where clients:
 3. Have synthesis processed in the background.
 4. Receive completion via webhook.
 
-In parallel, the platform tracks quota usage (by character count) so each request contributes to measurable, auditable usage.
+In parallel, the platform tracks quota usage (by token count, where each whitespace-separated word is one token) so each request contributes to measurable, auditable usage.
 
 This architecture handles reliability and scale: API traffic remains responsive while long-running synthesis jobs are handled by workers and queue infrastructure.
 
@@ -42,7 +42,9 @@ The implemented HTTP surface includes:
 
 - `GET /health` on the API.
 - `POST /v1/tts` on the API for queued job submission.
-- `GET /health` on the Soprano inference service
+- `GET /v1/tts/{job_id}/status` on the API for polling the current state of a job.
+- `GET /v1/tts/{job_id}/result` on the API for fetching the final job record (including `audio_url` once complete).
+- `GET /health` on the Soprano inference service.
 - `POST /v1/audio/speech/stream` on the Soprano inference service for audio generation returned as 32kHz mono WAV streams.
 
 ## Testing the End-to-End Workflow
@@ -56,9 +58,9 @@ You can test the full suite directly using the Swagger UI assuming that you've d
 
 > Note: No need for registration since for the sake of simplicity it's done automatically. You can test this out using other usernames as well coupled with `len(username)` as the password.
 
-1. Use a service like [Webhook.site](https://webhook.site) to generate a unique callback URL.
-2. Submit a TTS job via the `POST /v1/tts` endpoint using your Webhook.site URL as the `callback_url`.
-3. You can then monitor the job state via the `/v1/tts/{job_id}/status` and `/v1/tts/{job_id}/result` endpoints, and eventually see the completion payload delivered to Webhook.site.
+3. Use a service like [Webhook.site](https://webhook.site) to generate a unique callback URL.
+4. Submit a TTS job via the `POST /v1/tts` endpoint using your Webhook.site URL as the `callback_url`.
+5. You can then monitor the job state via the `/v1/tts/{job_id}/status` and `/v1/tts/{job_id}/result` endpoints, and eventually see the completion payload delivered to Webhook.site.
 
 ## Quick Start
 
@@ -107,6 +109,7 @@ You can test the full suite directly using the Swagger UI assuming that you've d
    - pgAdmin: <http://pgadmin.localhost:3000>, a database admin UI for browsing and managing Postgres.
    - SeaweedFS Master UI: <http://seaweedfs-master-ui.localhost:3000>, for inspecting the cluster and topology.
    - SeaweedFS Filer UI: <http://seaweedfs-filer-ui.localhost:3000>, for inspecting the stored audio files.
+   - SeaweedFS S3 endpoint: <http://seaweedfs-s3.localhost:3000>, the S3-compatible endpoint that audio URLs in webhook payloads resolve through.
 
 2. Verify API health:
 

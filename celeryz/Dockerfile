@@ -3,8 +3,10 @@ ENV PYTHONUNBUFFERED=1
 # installing uv tooling which is necessary for this project
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-ARG CELERY_BROKER_URL
-ARG CELERY_RESULT_BACKEND_URL
+# Required runtime environment variables (provided by docker-compose / the deployer):
+#   CELERY_BROKER_URL, CELERY_RESULT_BACKEND_URL, DATABASE_URL,
+#   TTS_INFERENCE_ENDPOINT, S3_BUCKET, S3_ENDPOINT_URL, S3_PUBLIC_ENDPOINT_URL,
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 ENV UV_PROJECT_ENVIRONMENT=/usr/local
 
 WORKDIR /container
