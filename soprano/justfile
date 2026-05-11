@@ -5,8 +5,7 @@ start:
         --loop uvloop \
         --no-reload \
         --no-ws \
-        --metrics \
-        --runtime-threads 8 \
+        --runtime-mode mt \
         endpoint:app
 
 preload:
