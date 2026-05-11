@@ -51,9 +51,9 @@ Session = make_sync_sessionmaker(pg_engine)
 # ---------------------------------------------------------------------------
 
 # Backoff ceilings (seconds). Backoff doubles between attempts and clamps here.
-RETRY_BACKOFF_MAX_REFUND = 60 * 10   # 10 minutes
-RETRY_BACKOFF_MAX_WEBHOOK = 60 * 10  # 10 minutes
-RETRY_BACKOFF_MAX_SYNTHESIZE = 60 * 30  # 30 minutes
+RETRY_BACKOFF_MAX_REFUND = 60 * 5   # 5 minutes
+RETRY_BACKOFF_MAX_WEBHOOK = 60 * 5  # 5 minutes
+RETRY_BACKOFF_MAX_SYNTHESIZE = 60 * 5  # 5 minutes
 
 
 @shared_task(
