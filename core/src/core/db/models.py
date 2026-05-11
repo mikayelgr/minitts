@@ -31,7 +31,10 @@ class UsageEventType(StrEnum):
 
 class QuotaUsageEvent(SQLModel, table=True):
     """
-    Represents an event where a user consumes quota tokens, associated with a job.
+    Represents an event where a user consumes (or is refunded) quota, measured in
+    characters of submitted text, associated with a job. The column on User is still
+    named ``quota_tokens_remaining`` for historical reasons; semantically it counts
+    characters.
     """
 
     __tablename__ = "quota_usage_events"

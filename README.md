@@ -13,7 +13,7 @@ MiniTTS is an async TTS microservice where clients:
 3. Have synthesis processed in the background.
 4. Receive completion via webhook.
 
-In parallel, the platform tracks quota usage (by token count, where each whitespace-separated word is one token) so each request contributes to measurable, auditable usage.
+In parallel, the platform tracks quota usage by the number of characters in the submitted text, so each request contributes to measurable, auditable usage.
 
 This architecture handles reliability and scale: API traffic remains responsive while long-running synthesis jobs are handled by workers and queue infrastructure.
 

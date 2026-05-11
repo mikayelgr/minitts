@@ -57,12 +57,12 @@ def generate_and_store_audio(session: Session, deps: GenerateAudioDeps):
         # otherwise the synthesis would be skipped and the job would sit in PENDING forever.
         raise RetryableError(f"Job {deps.job_id} is locked by another transaction")
     if not result.job:
-        # `lock_job_for_processing` filters by state in (CREATED, PENDING), so a None result here
-        # could mean either: (a) the row genuinely doesn't exist — likely an orphaned task whose
-        # submit-side transaction rolled back after Celery accepted the enqueue, or (b) the row
-        # exists but is in a terminal/in-flight state already (sibling delivery beat us to it,
-        # job was cancelled, etc.). Disambiguate so we can log usefully — silent no-ops on case
-        # (a) hide a real bug if the rollback path ever starts firing.
+        # `lock_job_for_processing` filters by state in (CREATED, PENDING, EXECUTING), so a None
+        # result here could mean either: (a) the row genuinely doesn't exist — likely an orphaned
+        # task whose submit-side transaction rolled back after Celery accepted the enqueue, or
+        # (b) the row exists but is in a terminal state already (SUCCESS / FAILURE — sibling
+        # delivery beat us to it, job was cancelled, etc.). Disambiguate so we can log usefully —
+        # silent no-ops on case (a) hide a real bug if the rollback path ever starts firing.
         exists = session.execute(select(Job.id).where(Job.id == job_uuid)).scalar_one_or_none()
         if exists is None:
             logger.warning(
@@ -94,9 +94,10 @@ def generate_and_store_audio(session: Session, deps: GenerateAudioDeps):
         ) as response:
             if response.status_code != 200:
                 # Any non-200 from the inference endpoint is treated as transient and surfaced as
-                # RetryableError. The synthesize task retries on that exception with no upper bound
-                # (see celeryz.tasks docstring), so this branch never marks the job FAILURE on its
-                # own — only an unexpected exception in the calling task does, via the refund path.
+                # RetryableError. The synthesize task retries on that exception with no upper
+                # bound (see celeryz.tasks docstring), so this branch never marks the job FAILURE
+                # on its own — only an unexpected exception in the calling task does, via
+                # mark_job_failed alongside the refund enqueue.
                 logger.warning(f"Received non-200 response for job={job.id} status={response.status_code}")
                 job.state = JobState.PENDING
                 job.error = f"Received non-200 response: {response.status_code}. Retrying..."
@@ -184,6 +185,26 @@ def post_job_to_webhook(session: Session, job_id: str):
         raise RetryableError(f"HTTP status error: {e}")
 
 
+def mark_job_failed(session: Session, job_id: str, error: str) -> None:
+    """Transition a job to FAILURE during the absolute-failure path of synthesize_audio.
+
+    Caller is expected to rollback any in-flight transaction on the session before calling
+    this — the synthesize except path may unwind mid-transaction and any uncommitted state
+    would otherwise be flushed alongside the FAILURE write. Idempotent on jobs already in a
+    terminal state (SUCCESS / FAILURE) — those are left untouched.
+    """
+    job = session.execute(select(Job).where(Job.id == uuid.UUID(job_id))).scalar_one_or_none()
+    if job is None:
+        logger.warning(f"mark_job_failed: job_id={job_id} not found; nothing to mark")
+        return
+    if job.state in (JobState.SUCCESS, JobState.FAILURE):
+        return
+    job.state = JobState.FAILURE
+    job.error = error
+    job.completed_at = datetime.now(timezone.utc)
+    session.commit()
+
+
 def process_refund(session: Session, job_id: str, quota_usage_event_id: int):
     try:
         # Lock the original USAGE event for the duration of the transaction so two concurrent
@@ -220,7 +241,7 @@ def process_refund(session: Session, job_id: str, quota_usage_event_id: int):
         user.quota_tokens_remaining += original_event.amount
 
         session.commit()
-        logger.info(f"Successfully refunded {original_event.amount} tokens for job {job_id} to user {user.id}")
+        logger.info(f"Successfully refunded {original_event.amount} characters for job {job_id} to user {user.id}")
 
     except Exception as e:
         session.rollback()

@@ -6,7 +6,7 @@ from celery import Task, shared_task
 import logging
 from .main import pg_engine
 from core.db.engine import make_sync_sessionmaker
-from .util import generate_and_store_audio, GenerateAudioDeps, post_job_to_webhook, process_refund
+from .util import generate_and_store_audio, GenerateAudioDeps, mark_job_failed, post_job_to_webhook, process_refund
 from .exc import RetryableError
 
 logger = logging.getLogger(__name__)
@@ -25,6 +25,8 @@ Session = make_sync_sessionmaker(pg_engine)
 #                       with the caller (no completion notification).
 #   * synthesize_audio — a dropped synthesis leaves the job in PENDING forever
 #                       and the user's quota deduction is never reconciled.
+#                       Retries cover transient errors; absolute failures take
+#                       the refund-and-mark-FAILURE path described below.
 #
 # "Indefinite" means there is no attempt cap, but there is still an exponential
 # backoff with a per-task ceiling (RETRY_BACKOFF_MAX_*) so a flapping
@@ -38,8 +40,11 @@ Session = make_sync_sessionmaker(pg_engine)
 #   * Exception       — anything else. In synthesize_audio this is treated as
 #                       an absolute failure: the task does NOT retry the
 #                       synthesis itself; it instead enqueues refund_tts_job
-#                       and exits. (Enqueueing the refund is its own retry
-#                       loop — see the inner except.)
+#                       and then transitions the job to FAILURE via
+#                       mark_job_failed. The refund enqueue is its own retry
+#                       loop, and is sequenced BEFORE the FAILURE mark so a
+#                       retry can still re-enter the except path (a FAILURE
+#                       row would be filtered out by lock_job_for_processing).
 #                       In send_webhook and refund_tts_job there is no
 #                       refund/escape hatch, so unexpected exceptions are also
 #                       retried indefinitely.
@@ -122,10 +127,20 @@ def synthesize_audio(self: Task, job_id: str, quota_usage_event_id: int):
                     job_id=job_id,
                     quota_usage_event_id=quota_usage_event_id,
                 )
-            except Exception as e:
+            except Exception as enqueue_err:
                 # Enqueueing the refund itself failed (broker hiccup) — retry the synthesize task
                 # so we get another shot at scheduling the refund. The synthesis itself is
-                # idempotent at the row-state level (lock_job_for_processing filters states), so
-                # re-running it is safe.
-                logger.error(f"Failed to enqueue refund task for job={job_id}: {e}")
-                raise self.retry(exc=e, max_retries=None)
+                # idempotent at the row-state level: lock_job_for_processing matches CREATED /
+                # PENDING / EXECUTING, and we haven't yet marked FAILURE, so a retry can re-enter
+                # this except path and try the refund enqueue again. Order matters: marking
+                # FAILURE first would let the retry find the row in FAILURE, get filtered out by
+                # lock_job_for_processing, and silently drop the refund.
+                logger.error(f"Failed to enqueue refund task for job={job_id}: {enqueue_err}")
+                raise self.retry(exc=enqueue_err, max_retries=None)
+            try:
+                session.rollback()  # discard any uncommitted state before the FAILURE write
+                mark_job_failed(session, job_id, f"Synthesis failed: {e}")
+            except Exception as mark_err:
+                # The refund is already queued, so dropping the FAILURE mark leaves the job in
+                # EXECUTING but does not lose the refund. Log and let the task complete normally.
+                logger.error(f"Failed to mark job={job_id} as FAILURE: {mark_err}")

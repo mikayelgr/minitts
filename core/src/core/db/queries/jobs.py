@@ -37,16 +37,25 @@ def lock_job_for_processing(session: Session, job_id: UUID) -> JobAccessResult:
     Uses nowait=True to explicitly raise OperationalError if the job exists but is locked,
     allowing us to distinguish between "not found", "locked", and "successfully locked".
 
+    Matches jobs in CREATED, PENDING, or EXECUTING state. EXECUTING is included so that a
+    redelivered task can recover a job whose previous worker died after the EXECUTING commit
+    but before the terminal commit; terminal states (SUCCESS / FAILURE) are excluded so a
+    retry that fires after the absolute-failure path no-ops cleanly.
+
     Returns:
         JobAccessResult with the job if successfully locked, or is_locked=True if locked/unavailable.
     """
 
+    # EXECUTING is included so that a redelivered task can pick up a job whose previous worker
+    # died between `state = EXECUTING; session.commit()` and the terminal commit. The commit
+    # released the row lock, so the dead worker no longer holds it; nowait + the row lock keep
+    # two live workers from colliding on the same row.
     stmt = (
         select(Job)
         .with_for_update(nowait=True)
         .where(
             Job.id == job_id,
-            Job.state.in_([JobState.CREATED, JobState.PENDING]),
+            Job.state.in_([JobState.CREATED, JobState.PENDING, JobState.EXECUTING]),
         )
         .limit(1)
     )

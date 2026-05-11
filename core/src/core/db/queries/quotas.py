@@ -12,7 +12,7 @@ async def create_quota_usage_event(
         session (AsyncSession): The database session to use for the operation.
         user (User): The user associated with the quota usage event.
         job (Job): The job associated with the quota usage event.
-        amount (int): The number of quota tokens consumed or refunded.
+        amount (int): The number of quota units (characters) consumed or refunded.
         event_type (UsageEventType): The type of the event, either USAGE or REFUND.
 
     Returns:

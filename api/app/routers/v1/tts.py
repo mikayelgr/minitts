@@ -87,7 +87,7 @@ async def submit(
     user: Annotated[User, Depends(authenticate)],
     payload: CreateTTSJobRequest = Body(..., description="The TTS inference request payload"),
 ):
-    required_tokens = len(payload.text.split(" "))
+    required_chars = len(payload.text)
 
     # Re-fetch the user row with FOR UPDATE so the quota check + deduction is serialized against
     # concurrent requests from the same user. Without the lock, two requests can both observe the
@@ -96,13 +96,13 @@ async def submit(
     if locked_user is None:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="User not found")
 
-    if locked_user.quota_tokens_remaining < required_tokens:
+    if locked_user.quota_tokens_remaining < required_chars:
         raise HTTPException(
             status_code=HTTPStatus.PAYMENT_REQUIRED,
             detail="Quota exceeded. Please upgrade your plan.",
         )
 
-    locked_user.quota_tokens_remaining -= required_tokens
+    locked_user.quota_tokens_remaining -= required_chars
 
     job = await core.db.queries.jobs.create_job(
         session,
@@ -118,7 +118,7 @@ async def submit(
         session,
         locked_user,
         job,
-        amount=required_tokens,
+        amount=required_chars,
         event_type=UsageEventType.USAGE,
     )
     await session.flush()
