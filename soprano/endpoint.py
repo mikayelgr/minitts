@@ -1,4 +1,5 @@
 import asyncio
+import re
 import warnings
 import io
 import wave
@@ -83,6 +84,10 @@ class EndpointApp(FastAPI):
 
 app = EndpointApp(lifespan=lifespan, title="Soprano Inference API", description="API for SopranoTTS inference")
 
+# Limit the streaming endpoint to one in-flight request at a time so the single
+# model instance isn't time-sliced across concurrent generators.
+stream_speech_semaphore = asyncio.Semaphore(1)
+
 
 class AudioStreamingResponse(StreamingResponse):
     media_type = "audio/wav"
@@ -102,51 +107,58 @@ async def stream_speech(text: str = Body(..., media_type="text/plain")) -> Async
     if not text:
         raise HTTPException(status_code=400, detail="Request body must contain text to synthesize.")
 
-    # Generate and yield the WAV header first.
-    yield get_wav_header(
-        SOPRANO_SAMPLE_RATE,
-        SOPRANO_SAMPLE_WIDTH,
-        SOPRANO_CHANNELS,
-    )
+    async with stream_speech_semaphore:
+        # Generate and yield the WAV header first.
+        yield get_wav_header(
+            SOPRANO_SAMPLE_RATE,
+            SOPRANO_SAMPLE_WIDTH,
+            SOPRANO_CHANNELS,
+        )
 
-    # Then, stream the raw audio chunks.
-    generator: Generator[Tensor, Any] = app.state.model.infer_stream(text)
+        # Then, stream the raw audio chunks.
+        generator: Generator[Tensor, Any] = app.state.model.infer_stream(text)
 
-    # By offloading the synchronous, CPU-bound `next(generator)` call to a background
-    # thread using `asyncio.to_thread`, we prevent the PyTorch inference from blocking
-    # the main ASGI event loop, allowing the server to handle concurrent requests.
-    #
-    # Additionally, we're disabling PyTorch's autograd engine during inference. Since this service
-    # only runs forward passes and never computes gradients, the computation graph that autograd
-    # builds on every operation is pure overhead. inference_mode is stricter than no_grad, because
-    # tensors created inside it cannot participate in autograd at all, letting PyTorch skip internal
-    # bookkeeping that no_grad still performs.
-    @torch.inference_mode()
-    def _next_chunk():
-        """Helper function to get the next audio chunk from the generator."""
-
-        try:
-            return next(generator)
-        except StopIteration:
-            return None
-
-    while True:
-        # Offload the blocking CPU-bound ML inference call to a background thread
-        generated_chunk = await asyncio.to_thread(_next_chunk)
-        if generated_chunk is None:
-            break
-
-        # Convert float32 [-1.0, 1.0] audio to 16-bit PCM integer [-32768, 32767].
+        # By offloading the synchronous, CPU-bound `next(generator)` call to a background
+        # thread using `asyncio.to_thread`, we prevent the PyTorch inference from blocking
+        # the main ASGI event loop, allowing the server to handle concurrent requests.
         #
-        # Formatting mismatch context:
-        # The WAV header declares 16-bit PCM (integers), but SopranoTTS outputs
-        # float32 values between -1.0 and 1.0. If raw float32 bytes are sent
-        # directly, the audio player misinterprets the memory bits as extreme
-        # integer fluctuations, resulting in a loud "screaming" white noise.
-        #
-        # The fix:
-        # We multiply by 32767.0 (the max positive value of a 16-bit signed
-        # integer) to scale the amplitude, then explicitly cast to torch.int16.
-        # This aligns the model's data with the WAV header's format, enabling clean playback.
-        # https://stackoverflow.com/questions/22895657/how-can-i-play-raw-samples-pcm-16-audio-data-record-from-android-in-web-using-w
-        yield (generated_chunk * 32767.0).to(torch.int16).cpu().numpy().tobytes()
+        # Additionally, we're disabling PyTorch's autograd engine during inference. Since this service
+        # only runs forward passes and never computes gradients, the computation graph that autograd
+        # builds on every operation is pure overhead. inference_mode is stricter than no_grad, because
+        # tensors created inside it cannot participate in autograd at all, letting PyTorch skip internal
+        # bookkeeping that no_grad still performs.
+        @torch.inference_mode()
+        def _next_chunk():
+            """Helper function to get the next audio chunk from the generator."""
+
+            try:
+                return next(generator)
+            except StopIteration:
+                return None
+            except Exception as e:
+                # Surface inference/preprocessing failures (e.g. inflect's
+                # NumOutOfRangeError on absurdly large numbers) as HTTP errors
+                # so the client doesn't receive a 200 with a truncated body.
+                logger.exception("Inference failed while streaming speech")
+                raise HTTPException(status_code=500, detail=f"Speech synthesis failed: {e}") from e
+
+        while True:
+            # Offload the blocking CPU-bound ML inference call to a background thread
+            generated_chunk = await asyncio.to_thread(_next_chunk)
+            if generated_chunk is None:
+                break
+
+            # Convert float32 [-1.0, 1.0] audio to 16-bit PCM integer [-32768, 32767].
+            #
+            # Formatting mismatch context:
+            # The WAV header declares 16-bit PCM (integers), but SopranoTTS outputs
+            # float32 values between -1.0 and 1.0. If raw float32 bytes are sent
+            # directly, the audio player misinterprets the memory bits as extreme
+            # integer fluctuations, resulting in a loud "screaming" white noise.
+            #
+            # The fix:
+            # We multiply by 32767.0 (the max positive value of a 16-bit signed
+            # integer) to scale the amplitude, then explicitly cast to torch.int16.
+            # This aligns the model's data with the WAV header's format, enabling clean playback.
+            # https://stackoverflow.com/questions/22895657/how-can-i-play-raw-samples-pcm-16-audio-data-record-from-android-in-web-using-w
+            yield (generated_chunk * 32767.0).to(torch.int16).cpu().numpy().tobytes()

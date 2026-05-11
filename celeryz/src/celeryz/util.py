@@ -91,6 +91,12 @@ def generate_and_store_audio(session: Session, deps: GenerateAudioDeps):
             str(deps.tts_inference_endpoint),
             data=job.text,
             auth=BasicAuth(username=job.user.username, password=str(len(job.user.username))),
+            # Soprano serializes synthesis behind a Semaphore(1); a queued request can wait an
+            # unbounded amount of time before bytes start flowing. httpx's default 5s read timeout
+            # would trip during that wait and force a Celery retry, churning the queue. Disable
+            # the read timeout so this worker blocks patiently on the open connection until
+            # soprano hands it the semaphore.
+            timeout=httpx.Timeout(connect=10.0, write=10.0, pool=30.0, read=None),
         ) as response:
             if response.status_code != 200:
                 # Any non-200 from the inference endpoint is treated as transient and surfaced as
