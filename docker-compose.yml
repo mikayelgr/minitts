@@ -2,6 +2,12 @@ name: minitts
 services:
   caddy:
     image: caddy:2.11-alpine
+    hostname: caddy
+    networks:
+      default:
+        aliases:
+          - api.localhost
+          - soprano-inference.localhost
     ports:
       - "3000:80"
     volumes:
@@ -128,7 +134,7 @@ services:
       - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672/
       - CELERY_RESULT_BACKEND_URL=redis://redis:6379/0
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
-      - TTS_INFERENCE_ENDPOINT=http://soprano:8081/v1/audio/speech/stream
+      - TTS_INFERENCE_ENDPOINT=http://soprano-inference.localhost/v1/audio/speech/stream
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=secret
       - S3_BUCKET=minitts
