@@ -174,3 +174,11 @@ While the current setup provides a comprehensive local development environment, 
 
 - **Grafana**: For continuous monitoring and observability across all services, providing dashboards to track their states, performance, and overall health.
 - **Sentry**: For centralized error tracking and monitoring, ensuring that any backend exceptions or failures are captured and that tickets are automatically opened where needed.
+
+## License
+
+This project is licensed under the **AGPL-3.0 license**.
+
+**Commercial use of this project or any derivative work requires a separate commercial license.**
+
+If you are interested in using MiniTTS in a commercial product or service, please open an issue on this repository and include your contact email. I will provide licensing options and terms.
